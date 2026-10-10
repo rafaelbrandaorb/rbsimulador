@@ -68,14 +68,7 @@ const SCAN_MS = 100;
 const makeId = () => Math.random().toString(36).slice(2, 9);
 const blankProject = (): SimulatorProject => ({
   name: "Meu projeto",
-  rungs: [{
-    id: makeId(),
-    title: "Comando de saída",
-    instructions: [
-      { id: makeId(), type: "contact-no", tag: "I0.0", comment: "Chave de entrada" },
-      { id: makeId(), type: "coil", tag: "Q0.0", comment: "Saída digital" },
-    ],
-  }],
+  rungs: [],
   widgets: [],
 });
 
@@ -385,7 +378,7 @@ function Simulator() {
           <IoPanel runtime={runtime} running={running} setBit={setBit} />
           <div className="inspector-title"><Box size={14} /> Propriedades</div>
           {pane === "ladder" && selected ? (
-            <InstructionInspector instruction={selected} tags={tags} disabled={running} move={(direction) => setProject(current => ({ ...current, rungs: current.rungs.map(r => { const instructions = [...r.instructions]; const index = instructions.findIndex(i => i.id === selected.id); const target = index + direction; if (index < 0 || target < 0 || target >= instructions.length) return r; const a = instructions[index]; const b = instructions[target]; if (!a || !b) return r; instructions[index] = b; instructions[target] = a; return { ...r, instructions }; }) }))} update={updateInstruction} remove={() => {
+            <InstructionInspector instruction={selected} sealTag={project.rungs.find(r => r.instructions.some(i => i.id === selected.id))?.instructions.find(i => i.type.startsWith("coil"))?.tag ?? "Q0.0"} tags={tags} disabled={running} move={(direction) => setProject(current => ({ ...current, rungs: current.rungs.map(r => { const instructions = [...r.instructions]; const index = instructions.findIndex(i => i.id === selected.id); const target = index + direction; if (index < 0 || target < 0 || target >= instructions.length) return r; const a = instructions[index]; const b = instructions[target]; if (!a || !b) return r; instructions[index] = b; instructions[target] = a; return { ...r, instructions }; }) }))} update={updateInstruction} remove={() => {
               setProject((current) => ({ ...current, rungs: current.rungs.map((rung) => ({ ...rung, instructions: rung.instructions.filter((item) => item.id !== selected.id) })) }));
               setSelectedInstruction(null);
             }} />
@@ -491,12 +484,13 @@ function InstructionView({ instruction, energized, selected, onClick }: { instru
   </div>;
 }
 
-function InstructionInspector({ instruction, tags, disabled, move, update, remove }: { instruction: Instruction; tags: string[]; disabled: boolean; move: (direction: number) => void; update: (patch: Partial<Instruction>) => void; remove: () => void }) {
+function InstructionInspector({ instruction, sealTag, tags, disabled, move, update, remove }: { instruction: Instruction; sealTag: string; tags: string[]; disabled: boolean; move: (direction: number) => void; update: (patch: Partial<Instruction>) => void; remove: () => void }) {
   const timer = instruction.type === "ton" || instruction.type === "tof";
   const contact = instruction.type.startsWith("contact");
   const okay = contact ? readableTag(instruction.tag) : timer ? validTag(instruction.tag, true) : /^[QM]\d+\.[0-7]$/.test(instruction.tag);
+  const hasSeal = instruction.parallel?.some(p => p.tag === sealTag && !p.normallyClosed);
   return <fieldset className="property-form" disabled={disabled}><div className="property-type">{instructionLabel[instruction.type]}</div><label>Endereço / tag<input list="ladder-tags" value={instruction.tag} onChange={e => update({ tag: normalizeTag(e.target.value) })} /></label><datalist id="ladder-tags">{tags.map(t => <option key={t} value={t} />)}</datalist>{!okay && <p className="field-error">{timer ? "Use T1." : contact ? "Use I0.0, Q0.0, M0.0 ou T1." : "Bobina: use Q0.0 ou M0.0."}</p>}{timer && <label>Tempo programado (ms)<input type="number" min="100" step="100" value={instruction.preset ?? 2000} onChange={e => update({ preset: Math.max(100, Number(e.target.value)) })} /></label>}<label>Comentário<input value={instruction.comment ?? ""} onChange={e => update({ comment: e.target.value })} /></label>
-    {contact && <><strong className="text-xs">Ramais paralelos (OU)</strong>{instruction.parallel?.map((p, index) => <div className="parallel-properties" key={index}><input aria-label={`Tag do ramal ${index + 1}`} list="ladder-tags" value={p.tag} onChange={e => update({ parallel: instruction.parallel?.map((item, n) => n === index ? { ...item, tag: normalizeTag(e.target.value) } : item) })} /><select aria-label={`Tipo do ramal ${index + 1}`} value={p.normallyClosed ? "nc" : "no"} onChange={e => update({ parallel: instruction.parallel?.map((item, n) => n === index ? { ...item, normallyClosed: e.target.value === "nc" } : item) })}><option value="no">NA</option><option value="nc">NF</option></select><Button size="icon" variant="ghost" title="Excluir ramal" onClick={() => update({ parallel: instruction.parallel?.filter((_, n) => n !== index) })}><Trash2 size={12} /></Button></div>)}<Button size="sm" onClick={() => update({ parallel: [...(instruction.parallel ?? []), { tag: "Q0.0", normallyClosed: false }] })}><Plus size={12} /> Ramal paralelo</Button></>}
+    {contact && <><strong className="text-xs">Selo / ramais paralelos (OU)</strong><Button size="sm" disabled={hasSeal || (instruction.parallel?.length ?? 0) >= 8} onClick={() => update({ parallel: [...(instruction.parallel ?? []), { tag: sealTag, normallyClosed: false }] })}><Plus size={12} /> Adicionar selo</Button>{instruction.parallel?.map((p, index) => <div className="parallel-properties" key={index}><input aria-label={`Tag do ramal ${index + 1}`} list="ladder-tags" value={p.tag} onChange={e => update({ parallel: instruction.parallel?.map((item, n) => n === index ? { ...item, tag: normalizeTag(e.target.value) } : item) })} /><select aria-label={`Tipo do ramal ${index + 1}`} value={p.normallyClosed ? "nc" : "no"} onChange={e => update({ parallel: instruction.parallel?.map((item, n) => n === index ? { ...item, normallyClosed: e.target.value === "nc" } : item) })}><option value="no">NA</option><option value="nc">NF</option></select><Button size="icon" variant="ghost" title="Excluir ramal" onClick={() => update({ parallel: instruction.parallel?.filter((_, n) => n !== index) })}><Trash2 size={12} /></Button></div>)}<Button size="sm" disabled={(instruction.parallel?.length ?? 0) >= 8} onClick={() => update({ parallel: [...(instruction.parallel ?? []), { tag: "Q0.0", normallyClosed: false }] })}><Plus size={12} /> Ramal paralelo</Button></>}
     <div className="flex gap-2"><Button title="Mover para esquerda" onClick={() => move(-1)}>←</Button><Button title="Mover para direita" onClick={() => move(1)}>→</Button></div><Button variant="danger" onClick={remove}><Trash2 size={13} /> Excluir instrução</Button></fieldset>;
 }
 

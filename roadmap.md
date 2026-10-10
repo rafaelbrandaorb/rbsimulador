@@ -1,5 +1,8 @@
 # RB SIMULADOR
 
+- [ ] Iniciar projetos vazios e oferecer selo configurável como no LogixPro e TIA
+- [ ] Testar criação de selo, retenção e desligamento pela interface
+
 - [x] Corrigir início do teste IHM, acesso às propriedades e sobreposição de objetos
 - [x] Validar acionamento Ladder/IHM e instrumentos após as correções
 
