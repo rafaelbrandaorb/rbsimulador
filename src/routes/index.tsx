@@ -139,8 +139,8 @@ function Simulator() {
       id: makeId(),
       type: tool,
       tag: timer ? `T${tags.filter((tag) => tag.startsWith("T")).length + 1}` : `${tool === "coil" ? "Q" : "I"}0.0`,
-      preset: timer ? 2000 : undefined,
       comment: "",
+      ...(timer ? { preset: 2000 } : {}),
     };
     setProject((current) => ({
       ...current,
@@ -295,7 +295,14 @@ function Simulator() {
               <div className="rung-list">
                 {project.rungs.length === 0 ? <EmptyLadder onAdd={addRung} /> : project.rungs.map((rung, index) => (
                   <RungView key={rung.id} rung={rung} index={index} runtime={runtime} running={running} tool={tool} selectedId={selectedInstruction}
-                    onAdd={() => addInstruction(rung.id)} onSelect={(id) => tool === "delete" ? removeInstruction(rung.id, id) : setSelectedInstruction(id)}
+                    onAdd={() => addInstruction(rung.id)} onSelect={(instruction) => {
+                      if (tool === "delete") return removeInstruction(rung.id, instruction.id);
+                      if (running && (instruction.type === "contact-no" || instruction.type === "contact-nc") && instruction.tag.startsWith("I")) {
+                        setBit(instruction.tag, !runtime.bits[instruction.tag]);
+                        setNotice(`${instruction.tag} = ${!runtime.bits[instruction.tag] ? "TRUE" : "FALSE"}`);
+                      }
+                      setSelectedInstruction(instruction.id);
+                    }}
                     onDelete={() => setProject((current) => ({ ...current, rungs: current.rungs.filter((item) => item.id !== rung.id) }))} />
                 ))}
               </div>
@@ -354,14 +361,14 @@ function EmptyLadder({ onAdd }: { onAdd: () => void }) {
 }
 
 function RungView({ rung, index, runtime, running, tool, selectedId, onAdd, onSelect, onDelete }: {
-  rung: Rung; index: number; runtime: Runtime; running: boolean; tool: Tool; selectedId: string | null; onAdd: () => void; onSelect: (id: string) => void; onDelete: () => void;
+  rung: Rung; index: number; runtime: Runtime; running: boolean; tool: Tool; selectedId: string | null; onAdd: () => void; onSelect: (instruction: Instruction) => void; onDelete: () => void;
 }) {
   return <article className="rung-card">
     <header><span>Rede {index + 1}</span><span>{rung.title}</span><Button variant="ghost" size="icon" aria-label={`Excluir rede ${index + 1}`} onClick={onDelete}><Trash2 size={13} /></Button></header>
     <div className="rung-canvas">
       <div className={`power-rail ${running ? "energized" : ""}`} />
       <div className="rung-wire-track">
-        {rung.instructions.map((instruction) => <InstructionView key={instruction.id} instruction={instruction} energized={running && runtime.powered[instruction.id]} selected={selectedId === instruction.id} onClick={() => onSelect(instruction.id)} />)}
+        {rung.instructions.map((instruction) => <InstructionView key={instruction.id} instruction={instruction} energized={Boolean(running && runtime.powered[instruction.id])} selected={selectedId === instruction.id} onClick={() => onSelect(instruction)} />)}
         <button className={`insert-node ${tool && tool !== "delete" ? "ready" : ""}`} onClick={onAdd} title="Inserir instrução"><Plus size={15} /></button>
       </div>
       <div className="power-rail right" />
@@ -373,7 +380,7 @@ function InstructionView({ instruction, energized, selected, onClick }: { instru
   const timer = instruction.type === "ton" || instruction.type === "tof";
   return <div className={`instruction-wrap ${energized ? "energized" : ""}`}>
     <span className="wire" />
-    <button className={`instruction ${selected ? "selected" : ""}`} onClick={onClick}>
+    <button className={`instruction ${selected ? "selected" : ""}`} onClick={onClick} title={instruction.type.startsWith("contact") && instruction.tag.startsWith("I") ? "Em RUN, clique para alternar esta entrada" : "Editar instrução"}>
       <span className="instruction-tag">{instruction.tag}</span>
       {instruction.type === "contact-no" && <strong>—| |—</strong>}
       {instruction.type === "contact-nc" && <strong>—|/|—</strong>}
