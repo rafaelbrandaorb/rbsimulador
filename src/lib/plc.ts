@@ -19,7 +19,7 @@ export type HmiWidget = {
   label: string;
 };
 
-export type TimerValue = { elapsed: number; preset: number; done: boolean; input: boolean; offStartedAt?: number };
+export type TimerValue = { elapsed: number; preset: number; done: boolean; input: boolean; offStartedAt?: number | undefined };
 export type Runtime = {
   bits: Record<string, boolean>;
   timers: Record<string, TimerValue>;
@@ -67,7 +67,7 @@ export function scanProject(project: SimulatorProject, runtime: Runtime, scanMs:
       if (instruction.type === "tof") {
         const previous = timers[instruction.tag] ?? { elapsed: 0, preset: instruction.preset ?? 2000, done: false, input: false };
         const offStartedAt = power ? undefined : previous.input ? now : previous.offStartedAt ?? now;
-        const elapsed = power ? 0 : Math.min(now - offStartedAt, instruction.preset ?? 2000);
+        const elapsed = power || offStartedAt === undefined ? 0 : Math.min(now - offStartedAt, instruction.preset ?? 2000);
         timers[instruction.tag] = {
           elapsed,
           preset: instruction.preset ?? 2000,
