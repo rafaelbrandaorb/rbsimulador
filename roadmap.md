@@ -1,7 +1,7 @@
 # RB SIMULADOR
 
-- [ ] Ampliar painel de entradas, saídas e memórias para múltiplos bytes e tags do projeto
-- [ ] Verificar lógica com tags de vários bytes, selo e intertravamento
+- [x] Ampliar painel de entradas, saídas e memórias para múltiplos bytes e tags do projeto
+- [x] Verificar lógica com tags de vários bytes, selo e intertravamento
 
 - [x] Iniciar projetos vazios e oferecer selo configurável como no LogixPro e TIA
 - [x] Testar criação de selo, retenção e desligamento pela interface
