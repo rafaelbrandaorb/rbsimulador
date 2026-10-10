@@ -15,3 +15,4 @@
 - Persist student projects locally and through portable JSON files; this simulator intentionally works without accounts or a hosted backend.
 - Keep instrument value selection shared across displays, gauges and trends; trend history is runtime-only, bounded to 60 samples and sampled only while the PLC runs.
 - Serial TON/TOF blocks pass their done state to downstream instructions so connected coils respect timer delays.
+- Counters share the PLC scan runtime, count rising edges only, and expose done/current/preset to Ladder and HMI; reset/load commands take priority over counting.
