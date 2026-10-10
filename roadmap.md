@@ -14,3 +14,5 @@
 - [x] Completar edição e operação da IHM com tags vinculadas ao Ladder
 - [x] Adicionar ramais paralelos e comandos de retenção para lógica dos alunos
 - [x] Validar criação, execução e reabertura de projeto Ladder/IHM pela interface
+- [ ] Adicionar motor, display, régua e gráfico com propriedades e tags
+- [ ] Testar atualização visual e exportação dos novos objetos IHM
