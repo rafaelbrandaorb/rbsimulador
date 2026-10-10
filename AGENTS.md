@@ -14,3 +14,4 @@
 - Validate imported projects structurally and block execution of invalid tags so student files cannot crash the simulator.
 - Persist student projects locally and through portable JSON files; this simulator intentionally works without accounts or a hosted backend.
 - Keep instrument value selection shared across displays, gauges and trends; trend history is runtime-only, bounded to 60 samples and sampled only while the PLC runs.
+- Serial TON/TOF blocks pass their done state to downstream instructions so connected coils respect timer delays.

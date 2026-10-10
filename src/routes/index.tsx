@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { HmiCanvas, WidgetInspector } from "@/components/hmi-editor";
 import {
   collectTags,
+  nextHmiPosition,
   parseProject,
   projectErrors,
   readableTag,
@@ -102,6 +103,14 @@ function Simulator() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notice, setNotice] = useState("Projeto pronto para edição");
   const fileInput = useRef<HTMLInputElement>(null);
+  const inspector = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!propertiesOpen || !(pane === "ladder" ? selectedInstruction : pane === "hmi" ? selectedWidget : null)) return;
+    const panel = inspector.current;
+    const title = panel?.querySelector<HTMLElement>(".inspector-title");
+    if (panel && title) panel.scrollTop += title.getBoundingClientRect().top - panel.getBoundingClientRect().top;
+  }, [selectedInstruction, selectedWidget, pane, propertiesOpen]);
 
   useEffect(() => {
     if (!running) return;
@@ -237,14 +246,27 @@ function Simulator() {
 
   const addWidget = (type: HmiWidgetType) => {
     if (hmiTesting) return;
+    const position = nextHmiPosition(project.widgets, type);
+    if (!position) { setNotice("Tela IHM cheia: mova ou exclua um objeto para liberar espaço"); return; }
     const widget: HmiWidget = {
-      id: makeId(), type, x: 40 + (project.widgets.length % 6) * 144, y: 64 + Math.floor(project.widgets.length / 6) * 112,
+      id: makeId(), type, ...position,
       tag: type === "text" ? "" : type.startsWith("button") ? "I0.0" : "Q0.0",
-      label: type === "motor" ? "Motor elétrico" : type === "display" ? "Display" : type === "gauge" ? "Nível" : type === "chart" ? "Tendência" : type === "lamp" ? "Motor" : type === "button-on" ? "LIGA" : type === "button-off" ? "DESLIGA" : type === "value" ? "Valor" : "Texto",
+      label: type === "motor" ? "Motor elétrico" : type === "display" ? "Display" : type === "gauge" ? "Nível" : type === "chart" ? "Tendência" : type === "lamp" ? "Motor" : type === "button-on" ? "LIGA" : type === "button-off" ? "DESLIGA" : type === "button-toggle" ? "CHAVE" : type === "value" ? "Valor" : "Texto",
       ...(["gauge", "chart"].includes(type) ? { min: 0, max: 1 } : {}),
     };
     setProject((current) => ({ ...current, widgets: [...current.widgets, widget] }));
     setSelectedWidget(widget.id); setPropertiesOpen(true);
+    setSidebarOpen(false);
+  };
+
+  const start = () => {
+    const errors = projectErrors(project);
+    if (errors.length) { setNotice(errors[0] ?? "Erro de projeto"); return false; }
+    if (!running) setRuntime(current => scanProject(project, current, SCAN_MS, Date.now()));
+    setRunning(true);
+    setNotice("CLP em modo RUN");
+    setPropertiesOpen(false); setSidebarOpen(false);
+    return true;
   };
 
   return (
@@ -271,7 +293,7 @@ function Simulator() {
       </nav>
 
       <div className="toolbar" aria-label="Comandos do projeto">
-        <Button variant="run" disabled={running} onClick={() => { const errors = projectErrors(project); if (errors.length) { setNotice(errors[0] ?? "Erro de projeto"); return; } setRuntime(current => scanProject(project, current, SCAN_MS, Date.now())); setRunning(true); setNotice("CLP em modo RUN"); }}><Play size={14} fill="currentColor" /> Executar</Button>
+        <Button variant="run" disabled={running} onClick={() => { if (start() && pane === "hmi") setHmiTesting(true); }}><Play size={14} fill="currentColor" /> Executar</Button>
         <Button variant="stop" disabled={!running} onClick={() => { setRunning(false); setHmiTesting(false); setRuntime(current => ({ ...EMPTY_RUNTIME, bits: Object.fromEntries(Object.entries(current.bits).filter(([tag]) => writableTag(tag))) })); setNotice("CLP em modo STOP"); }}><CircleStop size={14} /> Parar</Button>
         <span className="toolbar-separator" />
         <Button onClick={newProject}><FilePlus2 size={14} /> <span className="hidden sm:inline">Novo</span></Button>
@@ -347,7 +369,7 @@ function Simulator() {
                         setBit(instruction.tag, !runtime.bits[instruction.tag]);
                         setNotice(`${instruction.tag} = ${!runtime.bits[instruction.tag] ? "TRUE" : "FALSE"}`);
                       }
-                      setSelectedInstruction(instruction.id); setPropertiesOpen(true); setPropertiesOpen(true);
+                      setSelectedInstruction(instruction.id); if (!running) setPropertiesOpen(true);
                     }}
                     onDelete={() => setProject((current) => ({ ...current, rungs: current.rungs.filter((item) => item.id !== rung.id) }))} />
                 ))}
@@ -355,11 +377,11 @@ function Simulator() {
             </div>
           )}
 
-          {pane === "hmi" && <div className="hmi-workspace"><div className="workspace-head"><strong>IHM_1 · Conexão PLC_1</strong><div className="flex items-center gap-2"><span className="online-label"><span className={`status-led ${running ? "is-running" : ""}`} />{running ? "Online" : "Offline"}</span><Button size="sm" disabled={!running && !hmiTesting} onClick={() => { setHmiTesting(!hmiTesting); setNotice(hmiTesting ? "IHM em edição" : "IHM em teste — conectada ao CLP"); }}>{hmiTesting ? "Editar tela" : "Testar IHM"}</Button></div></div><HmiCanvas project={project} runtime={runtime} testing={hmiTesting} running={running} selectedId={selectedWidget} setSelectedId={id => { setSelectedWidget(id); if (id) setPropertiesOpen(true); }} setBit={setBit} setProject={setProject} /></div>}
+          {pane === "hmi" && <div className="hmi-workspace"><div className="workspace-head"><strong>IHM_1 · Conexão PLC_1</strong><div className="flex items-center gap-2"><span className="online-label"><span className={`status-led ${running ? "is-running" : ""}`} />{running ? "Online" : "Offline"}</span><Button size="sm" onClick={() => { if (hmiTesting) { setHmiTesting(false); setNotice("IHM em edição"); } else if (start()) { setHmiTesting(true); setNotice("IHM em teste — conectada ao CLP"); } }}>{hmiTesting ? "Editar tela" : "Testar IHM"}</Button></div></div><HmiCanvas project={project} runtime={runtime} testing={hmiTesting} running={running} selectedId={selectedWidget} setSelectedId={id => { setSelectedWidget(id); if (id) setPropertiesOpen(true); }} setBit={setBit} setProject={setProject} /></div>}
           {pane === "monitor" && <Monitor tags={tags} runtime={runtime} running={running} setBit={setBit} />}
         </section>
 
-        <aside className={`inspector ${propertiesOpen ? "properties-open" : ""}`}><div className="sidebar-mobile-head"><strong>Propriedades</strong><Button variant="ghost" size="icon" aria-label="Fechar propriedades" onClick={() => setPropertiesOpen(false)}><X size={16} /></Button></div>
+        <aside ref={inspector} className={`inspector ${propertiesOpen ? "properties-open" : ""}`}><div className="sidebar-mobile-head"><strong>Propriedades</strong><Button variant="ghost" size="icon" aria-label="Fechar propriedades" onClick={() => setPropertiesOpen(false)}><X size={16} /></Button></div>
           <IoPanel runtime={runtime} running={running} setBit={setBit} />
           <div className="inspector-title"><Box size={14} /> Propriedades</div>
           {pane === "ladder" && selected ? (

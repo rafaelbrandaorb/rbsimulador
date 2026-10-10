@@ -52,6 +52,24 @@ export function validTag(tag: string, timer = false) {
 
 export const readableTag = (tag: string) => validTag(tag) || validTag(tag, true);
 export const writableTag = (tag: string) => /^[IM]\d+\.[0-7]$/.test(tag);
+export function hmiSize(type: HmiWidgetType) {
+  return { width: type === "chart" ? 300 : 180, height: type === "gauge" ? 240 : type === "chart" ? 220 : type === "motor" ? 170 : 140 };
+}
+export function nextHmiPosition(widgets: HmiWidget[], type: HmiWidgetType) {
+  const size = hmiSize(type);
+  for (let y = 64; y <= 720 - size.height; y += 32) {
+    for (let x = 40; x <= 1100 - size.width; x += 32) {
+      const occupied = widgets.some(widget => {
+        const other = hmiSize(widget.type);
+        const left = Math.min(widget.x, 1100 - other.width);
+        const top = Math.min(widget.y, 720 - other.height);
+        return x < left + other.width + 16 && x + size.width + 16 > left && y < top + other.height + 16 && y + size.height + 16 > top;
+      });
+      if (!occupied) return { x, y };
+    }
+  }
+  return null;
+}
 export function hmiValue(widget: HmiWidget, runtime: Runtime): number {
   const timer = runtime.timers[widget.tag];
   const source = widget.display ?? (widget.tag.startsWith("T") && ["display", "gauge", "chart"].includes(widget.type) ? "elapsed" : "bit");
@@ -118,6 +136,7 @@ export function scanProject(project: SimulatorProject, runtime: Runtime, scanMs:
           done: power && elapsed >= (instruction.preset ?? 2000),
           input: power,
         };
+        power = timers[instruction.tag]?.done ?? false;
       }
 
       if (instruction.type === "tof") {
@@ -131,6 +150,7 @@ export function scanProject(project: SimulatorProject, runtime: Runtime, scanMs:
           input: power,
           offStartedAt,
         };
+        power = timers[instruction.tag]?.done ?? false;
       }
 
       if (instruction.type === "coil") bits[instruction.tag] = power;

@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
-import { readableTag, writableTag, type HmiWidget, type Runtime, type SimulatorProject } from "@/lib/plc";
+import { hmiSize, hmiValue, readableTag, writableTag, type HmiWidget, type Runtime, type SimulatorProject } from "@/lib/plc";
 import { HmiInstrument } from "@/components/hmi-instruments";
 
 type UpdateProject = React.Dispatch<React.SetStateAction<SimulatorProject>>;
@@ -17,10 +17,8 @@ export function HmiCanvas({ project, runtime, testing, running, selectedId, setS
     <div className="hmi-screen-caption">IHM_1 · RB Comfort · 1100 × 720</div>
     {project.widgets.map(widget => {
       const value = runtime.timers[widget.tag]?.done ?? runtime.bits[widget.tag] ?? false;
-      const timer = runtime.timers[widget.tag];
-      const display = widget.display === "elapsed" ? timer?.elapsed ?? 0 : widget.display === "preset" ? timer?.preset ?? 0 : value ? 1 : 0;
-      const wide = widget.type === "chart" ? 300 : 180;
-      const tall = widget.type === "gauge" ? 235 : widget.type === "chart" ? 215 : 135;
+      const display = hmiValue(widget, runtime);
+      const { width: wide, height: tall } = hmiSize(widget.type);
       return <div key={widget.id} data-widget-id={widget.id} style={{ left: Math.min(widget.x, 1100 - wide), top: Math.min(widget.y, 720 - tall) }} className={`hmi-widget ${widget.type === "chart" ? "wide-instrument" : ""} ${!testing && selectedId === widget.id ? "selected" : ""}`}
         onClick={event => { event.stopPropagation(); if (!testing) setSelectedId(widget.id); }}
         onPointerDown={event => {
