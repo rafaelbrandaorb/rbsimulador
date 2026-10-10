@@ -239,8 +239,9 @@ function Simulator() {
     if (hmiTesting) return;
     const widget: HmiWidget = {
       id: makeId(), type, x: 40 + (project.widgets.length % 6) * 144, y: 64 + Math.floor(project.widgets.length / 6) * 112,
-      tag: type === "lamp" || type === "value" ? "Q0.0" : type.startsWith("button") ? "I0.0" : "",
-      label: type === "lamp" ? "Motor" : type === "button-on" ? "LIGA" : type === "button-off" ? "DESLIGA" : type === "value" ? "Valor" : "Texto",
+      tag: type === "text" ? "" : type.startsWith("button") ? "I0.0" : "Q0.0",
+      label: type === "motor" ? "Motor elétrico" : type === "display" ? "Display" : type === "gauge" ? "Nível" : type === "chart" ? "Tendência" : type === "lamp" ? "Motor" : type === "button-on" ? "LIGA" : type === "button-off" ? "DESLIGA" : type === "value" ? "Valor" : "Texto",
+      ...(["gauge", "chart"].includes(type) ? { min: 0, max: 1 } : {}),
     };
     setProject((current) => ({ ...current, widgets: [...current.widgets, widget] }));
     setSelectedWidget(widget.id); setPropertiesOpen(true);
@@ -315,6 +316,10 @@ function Simulator() {
             <NavItem icon={<MousePointer2 size={15} />} label="Chave alternadora" onClick={() => { addWidget("button-toggle"); setPane("hmi"); }} />
             <NavItem icon={<Tags size={15} />} label="Texto" onClick={() => { addWidget("text"); setPane("hmi"); }} />
             <NavItem icon={<Tags size={15} />} label="Indicador de valor" onClick={() => { addWidget("value"); setPane("hmi"); }} />
+            <NavItem icon={<Box size={15} />} label="Motor elétrico" onClick={() => { addWidget("motor"); setPane("hmi"); }} />
+            <NavItem icon={<Tags size={15} />} label="Display digital" onClick={() => { addWidget("display"); setPane("hmi"); }} />
+            <NavItem icon={<Gauge size={15} />} label="Régua de nível" onClick={() => { addWidget("gauge"); setPane("hmi"); }} />
+            <NavItem icon={<Activity size={15} />} label="Gráfico de tendência" onClick={() => { addWidget("chart"); setPane("hmi"); }} />
           </SidebarSection>
           <div className="address-help"><strong>Endereçamento</strong><span><code>I0.0</code> Entrada</span><span><code>Q0.0</code> Saída</span><span><code>M0.0</code> Memória</span><span><code>T1</code> Temporizador</span></div>
         </aside>
@@ -350,7 +355,7 @@ function Simulator() {
             </div>
           )}
 
-          {pane === "hmi" && <div className="hmi-workspace"><div className="workspace-head"><strong>IHM_1 · Conexão PLC_1</strong><div className="flex items-center gap-2"><span className="online-label"><span className={`status-led ${running ? "is-running" : ""}`} />{running ? "Online" : "Offline"}</span><Button size="sm" disabled={!running && !hmiTesting} onClick={() => { setHmiTesting(!hmiTesting); setNotice(hmiTesting ? "IHM em edição" : "IHM em teste — conectada ao CLP"); }}>{hmiTesting ? "Editar tela" : "Testar IHM"}</Button></div></div><HmiCanvas project={project} runtime={runtime} testing={hmiTesting} selectedId={selectedWidget} setSelectedId={id => { setSelectedWidget(id); if (id) setPropertiesOpen(true); }} setBit={setBit} setProject={setProject} /></div>}
+          {pane === "hmi" && <div className="hmi-workspace"><div className="workspace-head"><strong>IHM_1 · Conexão PLC_1</strong><div className="flex items-center gap-2"><span className="online-label"><span className={`status-led ${running ? "is-running" : ""}`} />{running ? "Online" : "Offline"}</span><Button size="sm" disabled={!running && !hmiTesting} onClick={() => { setHmiTesting(!hmiTesting); setNotice(hmiTesting ? "IHM em edição" : "IHM em teste — conectada ao CLP"); }}>{hmiTesting ? "Editar tela" : "Testar IHM"}</Button></div></div><HmiCanvas project={project} runtime={runtime} testing={hmiTesting} running={running} selectedId={selectedWidget} setSelectedId={id => { setSelectedWidget(id); if (id) setPropertiesOpen(true); }} setBit={setBit} setProject={setProject} /></div>}
           {pane === "monitor" && <Monitor tags={tags} runtime={runtime} running={running} setBit={setBit} />}
         </section>
 
