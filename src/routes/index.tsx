@@ -10,7 +10,6 @@ import {
   FilePlus2,
   FolderOpen,
   Gauge,
-  HardDriveDownload,
   LampDesk,
   LayoutDashboard,
   Menu,
@@ -61,7 +60,18 @@ type Tool = InstructionType | "delete" | null;
 
 const SCAN_MS = 100;
 const makeId = () => Math.random().toString(36).slice(2, 9);
-const blankProject = (): SimulatorProject => ({ name: "Meu projeto", rungs: [], widgets: [] });
+const blankProject = (): SimulatorProject => ({
+  name: "Meu projeto",
+  rungs: [{
+    id: makeId(),
+    title: "Comando de saída",
+    instructions: [
+      { id: makeId(), type: "contact-no", tag: "I0.0", comment: "Chave de entrada" },
+      { id: makeId(), type: "coil", tag: "Q0.0", comment: "Saída digital" },
+    ],
+  }],
+  widgets: [],
+});
 
 const instructionLabel: Record<InstructionType, string> = {
   "contact-no": "Contato NA",
@@ -237,6 +247,10 @@ function Simulator() {
         </label>
       </header>
 
+      <nav className="menubar" aria-label="Menu principal">
+        <button>Projeto</button><button>Editar</button><button>Exibir</button><button>Inserir</button><button>Online</button><button>Opções</button><button>Ajuda</button>
+      </nav>
+
       <div className="toolbar" aria-label="Comandos do projeto">
         <Button variant="run" disabled={running} onClick={() => { setRunning(true); setNotice("CLP em modo RUN"); }}><Play size={14} fill="currentColor" /> Executar</Button>
         <Button variant="stop" disabled={!running} onClick={() => { setRunning(false); setNotice("CLP em modo STOP"); }}><CircleStop size={14} /> Parar</Button>
@@ -256,10 +270,15 @@ function Simulator() {
       <main className="workbench">
         <aside className={`sidebar ${sidebarOpen ? "is-open" : ""}`}>
           <div className="sidebar-mobile-head"><strong>Ferramentas</strong><Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}><X size={16} /></Button></div>
-          <SidebarSection title="Navegação">
-            <NavItem active={pane === "ladder"} icon={<LayoutDashboard size={15} />} label="Programação Ladder" onClick={() => { setPane("ladder"); setSidebarOpen(false); }} />
-            <NavItem active={pane === "hmi"} icon={<LampDesk size={15} />} label="Tela IHM" onClick={() => { setPane("hmi"); setSidebarOpen(false); }} />
-            <NavItem active={pane === "monitor"} icon={<Activity size={15} />} label="Tabela de observação" onClick={() => { setPane("monitor"); setSidebarOpen(false); }} />
+          <div className="pane-caption">Árvore do projeto</div>
+          <SidebarSection title={project.name || "Meu projeto"}>
+            <div className="tree-node branch"><Box size={14} /><strong>PLC_1 [CPU 1511-1 PN]</strong></div>
+            <div className="tree-node depth-1"><ChevronRight size={12} />Configuração do dispositivo</div>
+            <div className="tree-node depth-1 branch"><ChevronDown size={12} />Blocos de programa</div>
+            <NavItem active={pane === "ladder"} icon={<LayoutDashboard size={14} />} label="Main [OB1]" onClick={() => { setPane("ladder"); setSidebarOpen(false); }} />
+            <div className="tree-node depth-1 branch"><ChevronDown size={12} />Tecnologia</div>
+            <NavItem active={pane === "hmi"} icon={<LampDesk size={14} />} label="IHM_1" onClick={() => { setPane("hmi"); setSidebarOpen(false); }} />
+            <NavItem active={pane === "monitor"} icon={<Activity size={14} />} label="Tabela de observação" onClick={() => { setPane("monitor"); setSidebarOpen(false); }} />
           </SidebarSection>
           <SidebarSection title="Instruções básicas">
             <ToolItem label="Contato normalmente aberto" code="—| |—" active={tool === "contact-no"} onClick={() => setTool("contact-no")} />
@@ -314,6 +333,7 @@ function Simulator() {
         </section>
 
         <aside className="inspector">
+          <IoPanel runtime={runtime} setBit={setBit} />
           <div className="inspector-title"><Box size={14} /> Propriedades</div>
           {pane === "ladder" && selected ? (
             <InstructionInspector instruction={selected} update={updateInstruction} remove={() => {
@@ -337,6 +357,34 @@ function Simulator() {
       </footer>
     </div>
   );
+}
+
+function IoPanel({ runtime, setBit }: { runtime: Runtime; setBit: (tag: string, value: boolean) => void }) {
+  const inputs = Array.from({ length: 8 }, (_, index) => `I0.${index}`);
+  const outputs = Array.from({ length: 8 }, (_, index) => `Q0.${index}`);
+  return <section className="io-panel">
+    <div className="io-title"><span>SIMULADOR DE E/S</span><small>24 VDC</small></div>
+    <div className="cpu-strip"><div><span className="cpu-led power" />PWR</div><div><span className="cpu-led run" />RUN</div><strong>RB-CPU</strong></div>
+    <div className="io-bank">
+      <header><span>ENTRADAS DIGITAIS</span><code>DI 8x24VDC</code></header>
+      <div className="io-grid">{inputs.map((tag, index) => {
+        const value = Boolean(runtime.bits[tag]);
+        return <button key={tag} className={`io-channel input ${value ? "on" : ""}`} onClick={() => setBit(tag, !value)} aria-label={`Alternar entrada ${tag}`} aria-pressed={value}>
+          <span className="terminal">{index}</span><span className="toggle-handle" /><code>{tag}</code>
+        </button>;
+      })}</div>
+    </div>
+    <div className="io-bank">
+      <header><span>SAÍDAS DIGITAIS</span><code>DQ 8x24VDC</code></header>
+      <div className="io-grid">{outputs.map((tag, index) => {
+        const value = Boolean(runtime.bits[tag]);
+        return <div key={tag} className={`io-channel output ${value ? "on" : ""}`} aria-label={`Saída ${tag}: ${value ? "ligada" : "desligada"}`}>
+          <span className="terminal">{index}</span><span className="output-lamp" /><code>{tag}</code>
+        </div>;
+      })}</div>
+    </div>
+    <p>Clique nas chaves de entrada para testar a lógica.</p>
+  </section>;
 }
 
 function SidebarSection({ title, children }: { title: string; children: React.ReactNode }) {
