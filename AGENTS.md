@@ -13,3 +13,4 @@
 - Use separate HMI editing and testing modes, with pointer capture for momentary commands, to avoid moving objects while operating them.
 - Validate imported projects structurally and block execution of invalid tags so student files cannot crash the simulator.
 - Persist student projects locally and through portable JSON files; this simulator intentionally works without accounts or a hosted backend.
+- Keep instrument value selection shared across displays, gauges and trends; trend history is runtime-only, bounded to 60 samples and sampled only while the PLC runs.

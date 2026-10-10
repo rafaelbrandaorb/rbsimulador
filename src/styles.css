@@ -167,6 +167,41 @@ td code { color: var(--primary); font-weight: 700; }
 .hmi-screen-caption { height: 26px; padding: 6px 10px; background: var(--secondary); color: var(--muted-foreground); font-size: 10px; }
 .hmi-pane.testing .hmi-widget { cursor: default; }
 .hmi-widget { max-width: 180px; }
+.hmi-widget.wide-instrument { max-width: 300px; }
+.hmi-motor { width: 160px; display: grid; justify-items: center; gap: 4px; font-size: 11px; color: var(--muted-foreground); }
+.hmi-motor svg { width: 160px; height: 100px; }
+.motor-body, .motor-terminal { fill: var(--secondary); stroke: var(--border-strong); stroke-width: 2; }
+.motor-base, .motor-shaft { fill: var(--border-strong); stroke: var(--muted-foreground); }
+.motor-fin { stroke: var(--muted-foreground); stroke-width: 2; }
+.motor-fan-cover { fill: var(--panel); stroke: var(--border-strong); stroke-width: 3; }
+.motor-rotor { fill: var(--muted-foreground); transform-origin: 32px 48px; }
+.hmi-motor.active { color: var(--success-foreground); }
+.hmi-motor.active .motor-body { fill: var(--success-soft); stroke: var(--success); }
+.hmi-motor.active .motor-rotor { fill: var(--success); animation: motor-spin 1s linear infinite; }
+@keyframes motor-spin { to { transform: rotate(360deg); } }
+.instrument-status { font-size: 9px; font-weight: 700; }
+.hmi-motor code, .hmi-level code { font-size: 10px; color: var(--muted-foreground); }
+.hmi-digital { width: 170px; border: 2px solid var(--border-strong); border-radius: 4px; padding: 9px; background: var(--foreground); color: var(--title-muted); display: grid; gap: 8px; font-size: 11px; }
+.hmi-digital output { min-height: 42px; color: var(--success-soft); font: 700 26px Consolas, monospace; overflow-wrap: anywhere; }
+.hmi-digital output small { font-size: 11px; margin-left: 5px; }
+.hmi-digital code { font-size: 9px; }
+.hmi-level { width: 145px; display: grid; justify-items: center; gap: 4px; font-size: 11px; }
+.level-body { width: 128px; height: 158px; }
+.level-track { fill: var(--muted); stroke: var(--border-strong); }
+.level-fill { fill: var(--primary); }
+.level-tick { stroke: var(--muted-foreground); }
+.level-body text, .hmi-trend svg text { fill: var(--muted-foreground); font: 10px Consolas, monospace; }
+.hmi-level output { font: 700 13px Consolas, monospace; }
+.hmi-trend { width: 300px; border: 1px solid var(--border-strong); background: var(--card); border-radius: 3px; font-size: 11px; }
+.hmi-trend header, .hmi-trend footer { display: flex; gap: 8px; justify-content: space-between; padding: 7px; background: var(--panel); }
+.hmi-trend header { min-height: 32px; border-bottom: 1px solid var(--border); }
+.hmi-trend footer { color: var(--muted-foreground); font-size: 9px; }
+.hmi-trend svg { display: block; width: 100%; height: 154px; }
+.trend-grid { stroke: var(--border); stroke-dasharray: 3 3; }
+.trend-axis { fill: none; stroke: var(--border-strong); }
+.trend-line { fill: none; stroke: var(--primary); stroke-width: 2; }
+.trend-point { fill: var(--primary); }
+@media (prefers-reduced-motion: reduce) { .hmi-motor.active .motor-rotor { animation: none; } }
 .hmi-widget b, .hmi-widget strong { overflow-wrap: anywhere; }
 .hmi-button { max-width: 160px; height: auto; min-height: 40px; white-space: normal; overflow-wrap: anywhere; }
 .property-form { border: 0; margin: 0; min-width: 0; }
