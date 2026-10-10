@@ -6,9 +6,9 @@ export type Instruction = {
   id: string;
   type: InstructionType;
   tag: string;
-  preset?: number;
-  comment?: string;
-  parallel?: { tag: string; normallyClosed: boolean }[];
+  preset?: number | undefined;
+  comment?: string | undefined;
+  parallel?: { tag: string; normallyClosed: boolean }[] | undefined;
 };
 
 export type Rung = { id: string; title: string; instructions: Instruction[] };
@@ -20,8 +20,8 @@ export type HmiWidget = {
   y: number;
   tag: string;
   label: string;
-  action?: "set" | "reset" | "momentary" | "toggle";
-  display?: "bit" | "elapsed" | "preset";
+  action?: "set" | "reset" | "momentary" | "toggle" | undefined;
+  display?: "bit" | "elapsed" | "preset" | undefined;
 };
 
 export type TimerValue = { elapsed: number; preset: number; done: boolean; input: boolean; offStartedAt?: number | undefined };
