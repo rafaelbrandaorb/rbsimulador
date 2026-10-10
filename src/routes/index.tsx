@@ -248,7 +248,11 @@ function Simulator() {
       </header>
 
       <nav className="menubar" aria-label="Menu principal">
-        <button>Projeto</button><button>Editar</button><button>Exibir</button><button>Inserir</button><button>Online</button><button>Opções</button><button>Ajuda</button>
+        <Button variant="ghost" size="sm" onClick={newProject}>Novo projeto</Button>
+        <Button variant="ghost" size="sm" onClick={() => setPane("ladder")}>Programação</Button>
+        <Button variant="ghost" size="sm" onClick={() => setPane("hmi")}>IHM</Button>
+        <Button variant="ghost" size="sm" onClick={() => setPane("monitor")}>Observação</Button>
+        <Button variant="ghost" size="sm" onClick={addRung}>Inserir rede</Button>
       </nav>
 
       <div className="toolbar" aria-label="Comandos do projeto">
@@ -333,7 +337,7 @@ function Simulator() {
         </section>
 
         <aside className="inspector">
-          <IoPanel runtime={runtime} setBit={setBit} />
+          <IoPanel runtime={runtime} running={running} setBit={setBit} />
           <div className="inspector-title"><Box size={14} /> Propriedades</div>
           {pane === "ladder" && selected ? (
             <InstructionInspector instruction={selected} update={updateInstruction} remove={() => {
@@ -359,12 +363,12 @@ function Simulator() {
   );
 }
 
-function IoPanel({ runtime, setBit }: { runtime: Runtime; setBit: (tag: string, value: boolean) => void }) {
+function IoPanel({ runtime, running, setBit }: { runtime: Runtime; running: boolean; setBit: (tag: string, value: boolean) => void }) {
   const inputs = Array.from({ length: 8 }, (_, index) => `I0.${index}`);
   const outputs = Array.from({ length: 8 }, (_, index) => `Q0.${index}`);
   return <section className="io-panel">
     <div className="io-title"><span>SIMULADOR DE E/S</span><small>24 VDC</small></div>
-    <div className="cpu-strip"><div><span className="cpu-led power" />PWR</div><div><span className="cpu-led run" />RUN</div><strong>RB-CPU</strong></div>
+    <div className="cpu-strip"><div><span className="cpu-led power" />PWR</div><div><span className={`cpu-led ${running ? "run" : ""}`} />{running ? "RUN" : "STOP"}</div><strong>RB-CPU</strong></div>
     <div className="io-bank">
       <header><span>ENTRADAS DIGITAIS</span><code>DI 8x24VDC</code></header>
       <div className="io-grid">{inputs.map((tag, index) => {
