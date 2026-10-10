@@ -1,4 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { describe, test } from "node:test";
+import assert from "node:assert/strict";
+const expect = (actual: unknown) => ({ toBe: (value: unknown) => assert.equal(actual, value), toHaveLength: (value: number) => assert.equal(Array.isArray(actual) ? actual.length : -1, value), toThrow: () => { if (typeof actual !== "function") throw new Error("Expected function"); assert.throws(() => actual()); } });
 import { EMPTY_RUNTIME, parseProject, projectErrors, scanProject, type SimulatorProject } from "./plc";
 
 const project = (instructions: SimulatorProject["rungs"][number]["instructions"]): SimulatorProject => ({ name: "Teste", rungs: [{ id: "r", title: "Rede", instructions }], widgets: [] });
@@ -25,13 +27,13 @@ describe("Ladder e tags IHM", () => {
     expect(r.bits["Q0.0"]).toBe(false);
     r = scanProject(p, r, 100, 100);
     expect(r.bits["Q0.0"]).toBe(true);
-    expect(r.timers.T1?.elapsed).toBe(200);
+    expect(r.timers["T1"]?.elapsed).toBe(200);
     const off = project([{ id: "a", type: "contact-no", tag: "I0.0" }, { id: "t", type: "tof", tag: "T2", preset: 200 }]);
-    expect(scanProject(off, EMPTY_RUNTIME, 100, 0).timers.T2?.done).toBe(false);
+    expect(scanProject(off, EMPTY_RUNTIME, 100, 0).timers["T2"]?.done).toBe(false);
     r = scanProject(off, { ...EMPTY_RUNTIME, bits: { "I0.0": true } }, 100, 0);
     r = scanProject(off, { ...r, bits: { "I0.0": false } }, 100, 100);
-    expect(r.timers.T2?.done).toBe(true);
-    expect(scanProject(off, r, 100, 300).timers.T2?.done).toBe(false);
+    expect(r.timers["T2"]?.done).toBe(true);
+    expect(scanProject(off, r, 100, 300).timers["T2"]?.done).toBe(false);
   });
   test("importação rejeita conteúdo quebrado e tags de escrita inválidas", () => {
     expect(() => parseProject({ name: "x", rungs: [{}], widgets: [] })).toThrow();
