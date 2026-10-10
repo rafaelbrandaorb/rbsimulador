@@ -355,7 +355,7 @@ function Simulator() {
             </div>
           )}
 
-          {pane === "hmi" && <div className="hmi-workspace"><div className="workspace-head"><strong>IHM_1 · Conexão PLC_1</strong><div className="flex items-center gap-2"><span className="online-label"><span className={`status-led ${running ? "is-running" : ""}`} />{running ? "Online" : "Offline"}</span><Button size="sm" disabled={!running && !hmiTesting} onClick={() => { setHmiTesting(!hmiTesting); setNotice(hmiTesting ? "IHM em edição" : "IHM em teste — conectada ao CLP"); }}>{hmiTesting ? "Editar tela" : "Testar IHM"}</Button></div></div><HmiCanvas project={project} runtime={runtime} testing={hmiTesting} selectedId={selectedWidget} setSelectedId={id => { setSelectedWidget(id); if (id) setPropertiesOpen(true); }} setBit={setBit} setProject={setProject} /></div>}
+          {pane === "hmi" && <div className="hmi-workspace"><div className="workspace-head"><strong>IHM_1 · Conexão PLC_1</strong><div className="flex items-center gap-2"><span className="online-label"><span className={`status-led ${running ? "is-running" : ""}`} />{running ? "Online" : "Offline"}</span><Button size="sm" disabled={!running && !hmiTesting} onClick={() => { setHmiTesting(!hmiTesting); setNotice(hmiTesting ? "IHM em edição" : "IHM em teste — conectada ao CLP"); }}>{hmiTesting ? "Editar tela" : "Testar IHM"}</Button></div></div><HmiCanvas project={project} runtime={runtime} testing={hmiTesting} running={running} selectedId={selectedWidget} setSelectedId={id => { setSelectedWidget(id); if (id) setPropertiesOpen(true); }} setBit={setBit} setProject={setProject} /></div>}
           {pane === "monitor" && <Monitor tags={tags} runtime={runtime} running={running} setBit={setBit} />}
         </section>
 
