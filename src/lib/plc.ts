@@ -12,7 +12,7 @@ export type Instruction = {
 };
 
 export type Rung = { id: string; title: string; instructions: Instruction[] };
-export type HmiWidgetType = "lamp" | "button-on" | "button-off" | "button-toggle" | "text" | "value";
+export type HmiWidgetType = "lamp" | "button-on" | "button-off" | "button-toggle" | "text" | "value" | "motor" | "display" | "gauge" | "chart";
 export type HmiWidget = {
   id: string;
   type: HmiWidgetType;
@@ -22,6 +22,9 @@ export type HmiWidget = {
   label: string;
   action?: "set" | "reset" | "momentary" | "toggle" | undefined;
   display?: "bit" | "elapsed" | "preset" | undefined;
+  min?: number | undefined;
+  max?: number | undefined;
+  unit?: string | undefined;
 };
 
 export type TimerValue = { elapsed: number; preset: number; done: boolean; input: boolean; offStartedAt?: number | undefined };
@@ -49,6 +52,11 @@ export function validTag(tag: string, timer = false) {
 
 export const readableTag = (tag: string) => validTag(tag) || validTag(tag, true);
 export const writableTag = (tag: string) => /^[IM]\d+\.[0-7]$/.test(tag);
+export function hmiValue(widget: HmiWidget, runtime: Runtime): number {
+  const timer = runtime.timers[widget.tag];
+  const source = widget.display ?? (widget.tag.startsWith("T") && ["display", "gauge", "chart"].includes(widget.type) ? "elapsed" : "bit");
+  return source === "elapsed" ? timer?.elapsed ?? 0 : source === "preset" ? timer?.preset ?? 0 : (timer?.done ?? runtime.bits[widget.tag]) ? 1 : 0;
+}
 const instructionSchema = z.object({
   id: z.string().min(1), type: z.enum(["contact-no", "contact-nc", "coil", "coil-set", "coil-reset", "ton", "tof"]),
   tag: z.string(), preset: z.number().finite().min(100).optional(), comment: z.string().optional(),
@@ -57,9 +65,10 @@ const instructionSchema = z.object({
 const projectSchema = z.object({
   name: z.string(),
   rungs: z.array(z.object({ id: z.string().min(1), title: z.string(), instructions: z.array(instructionSchema).max(100) })).max(100),
-  widgets: z.array(z.object({ id: z.string().min(1), type: z.enum(["lamp", "button-on", "button-off", "button-toggle", "text", "value"]),
+  widgets: z.array(z.object({ id: z.string().min(1), type: z.enum(["lamp", "button-on", "button-off", "button-toggle", "text", "value", "motor", "display", "gauge", "chart"]),
     x: z.number().finite().min(0).max(1000), y: z.number().finite().min(0).max(660), tag: z.string(), label: z.string(),
     action: z.enum(["set", "reset", "momentary", "toggle"]).optional(), display: z.enum(["bit", "elapsed", "preset"]).optional(),
+    min: z.number().finite().optional(), max: z.number().finite().optional(), unit: z.string().max(16).optional(),
   })).max(100),
 });
 export function parseProject(data: unknown): SimulatorProject {
@@ -80,6 +89,7 @@ export function projectErrors(project: SimulatorProject): string[] {
   });
   project.widgets.forEach(w => {
     if (w.type !== "text" && !(w.type.startsWith("button") ? writableTag(w.tag) : readableTag(w.tag))) errors.push(`IHM ${w.label}: tag inválida ${w.tag || "vazia"}`);
+    if (["gauge", "chart"].includes(w.type) && (w.max ?? 1) <= (w.min ?? 0)) errors.push(`IHM ${w.label}: máximo deve ser maior que mínimo`);
   });
   return errors;
 }
