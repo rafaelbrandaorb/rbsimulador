@@ -100,6 +100,10 @@ button { letter-spacing: 0; }
 .cpu-strip div { display: flex; align-items: center; gap: 3px; }.cpu-strip strong { margin-left: auto; font-size: 9px; }
 .cpu-led { width: 6px; height: 6px; border-radius: 50%; background: var(--muted-foreground); }.cpu-led.power { background: var(--success); }.cpu-led.run { background: var(--success); box-shadow: 0 0 4px var(--success); }
 .io-bank { margin-top: 7px; border: 1px solid var(--border-strong); background: var(--panel-raised); }
+.io-byte-selector { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 5px 6px; color: var(--muted-foreground); font-size: 10px; }
+.io-byte-selector input { width: 78px; min-width: 0; height: 26px; border: 1px solid var(--input); border-radius: 2px; padding: 0 5px; color: var(--foreground); background: var(--card); }
+.io-used-bytes { display: flex; flex-wrap: wrap; gap: 2px; padding: 0 5px 5px; }
+.io-used-bytes button { height: 23px; padding: 0 6px; font-size: 10px; }
 .io-bank header { height: 25px; display: flex; align-items: center; justify-content: space-between; padding: 0 6px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: 8px; font-weight: 800; }
 .io-bank header code { color: var(--primary); font-size: 7px; }.io-grid { display: grid; grid-template-columns: repeat(4, 1fr); }
 .io-channel { min-width: 0; height: 52px; display: grid; grid-template-rows: 11px 20px 12px; place-items: center; border: 0; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 2px; background: var(--panel-raised); color: var(--foreground); font-size: 7px; }

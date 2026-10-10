@@ -336,7 +336,7 @@ function Simulator() {
             <NavItem icon={<Gauge size={15} />} label="Régua de nível" onClick={() => { addWidget("gauge"); setPane("hmi"); }} />
             <NavItem icon={<Activity size={15} />} label="Gráfico de tendência" onClick={() => { addWidget("chart"); setPane("hmi"); }} />
           </SidebarSection>
-          <div className="address-help"><strong>Endereçamento</strong><span><code>I0.0</code> Entrada</span><span><code>Q0.0</code> Saída</span><span><code>M0.0</code> Memória</span><span><code>T1</code> Temporizador</span></div>
+          <div className="address-help"><strong>Endereçamento</strong><span><code>I0…In</code> Entradas · bits 0–7</span><span><code>Q0…Qn</code> Saídas · bits 0–7</span><span><code>M0…Mn</code> Memórias · bits 0–7</span><span><code>T1…Tn</code> Temporizadores</span></div>
         </aside>
         {sidebarOpen && <button className="sidebar-backdrop" aria-label="Fechar ferramentas" onClick={() => setSidebarOpen(false)} />}
 
@@ -375,7 +375,7 @@ function Simulator() {
         </section>
 
         <aside ref={inspector} className={`inspector ${propertiesOpen ? "properties-open" : ""}`}><div className="sidebar-mobile-head"><strong>Propriedades</strong><Button variant="ghost" size="icon" aria-label="Fechar propriedades" onClick={() => setPropertiesOpen(false)}><X size={16} /></Button></div>
-          <IoPanel runtime={runtime} running={running} setBit={setBit} />
+          <IoPanel tags={tags} runtime={runtime} running={running} setBit={setBit} />
           <div className="inspector-title"><Box size={14} /> Propriedades</div>
           {pane === "ladder" && selected ? (
             <InstructionInspector instruction={selected} sealTag={project.rungs.find(r => r.instructions.some(i => i.id === selected.id))?.instructions.find(i => i.type.startsWith("coil"))?.tag ?? "Q0.0"} tags={tags} disabled={running} move={(direction) => setProject(current => ({ ...current, rungs: current.rungs.map(r => { const instructions = [...r.instructions]; const index = instructions.findIndex(i => i.id === selected.id); const target = index + direction; if (index < 0 || target < 0 || target >= instructions.length) return r; const a = instructions[index]; const b = instructions[target]; if (!a || !b) return r; instructions[index] = b; instructions[target] = a; return { ...r, instructions }; }) }))} update={updateInstruction} remove={() => {
@@ -401,31 +401,28 @@ function Simulator() {
   );
 }
 
-function IoPanel({ runtime, running, setBit }: { runtime: Runtime; running: boolean; setBit: (tag: string, value: boolean) => void }) {
-  const inputs = Array.from({ length: 8 }, (_, index) => `I0.${index}`);
-  const outputs = Array.from({ length: 8 }, (_, index) => `Q0.${index}`);
+function IoPanel({ tags, runtime, running, setBit }: { tags: string[]; runtime: Runtime; running: boolean; setBit: (tag: string, value: boolean) => void }) {
+  const [bytes, setBytes] = useState({ I: "0", Q: "0", M: "0" });
+  const banks = [{ prefix: "I", label: "Entradas", title: "ENTRADAS DIGITAIS" }, { prefix: "Q", label: "Saídas", title: "SAÍDAS DIGITAIS" }, { prefix: "M", label: "Memórias", title: "MEMÓRIAS INTERNAS" }] as const;
   return <section className="io-panel">
     <div className="io-title"><span>SIMULADOR DE E/S</span><small>24 VDC</small></div>
     <div className="cpu-strip"><div><span className="cpu-led power" />PWR</div><div><span className={`cpu-led ${running ? "run" : ""}`} />{running ? "RUN" : "STOP"}</div><strong>RB-CPU</strong></div>
-    <div className="io-bank">
-      <header><span>ENTRADAS DIGITAIS</span><code>DI 8x24VDC</code></header>
-      <div className="io-grid">{inputs.map((tag, index) => {
-        const value = Boolean(runtime.bits[tag]);
-        return <button key={tag} className={`io-channel input ${value ? "on" : ""}`} onClick={() => setBit(tag, !value)} aria-label={`Alternar entrada ${tag}`} aria-pressed={value}>
-          <span className="terminal">{index}</span><span className="toggle-handle" /><code>{tag}</code>
-        </button>;
-      })}</div>
-    </div>
-    <div className="io-bank">
-      <header><span>SAÍDAS DIGITAIS</span><code>DQ 8x24VDC</code></header>
-      <div className="io-grid">{outputs.map((tag, index) => {
-        const value = Boolean(runtime.bits[tag]);
-        return <div key={tag} className={`io-channel output ${value ? "on" : ""}`} aria-label={`Saída ${tag}: ${value ? "ligada" : "desligada"}`}>
-          <span className="terminal">{index}</span><span className="output-lamp" /><code>{tag}</code>
-        </div>;
-      })}</div>
-    </div>
-    <p>Clique nas chaves de entrada para testar a lógica.</p>
+    {banks.map(({ prefix, label, title }) => {
+      const byte = bytes[prefix] || "0";
+      const used = [...new Set(tags.filter(tag => tag.startsWith(prefix) && validTag(tag)).map(tag => tag.slice(1, tag.indexOf("."))))];
+      const choices = [...new Set([...Array.from({ length: 16 }, (_, i) => String(i)), ...used])];
+      return <div className="io-bank" key={prefix}>
+        <header><span>{title}</span><code>{prefix}{byte}.0–7</code></header>
+        <label className="io-byte-selector">Byte · {label}<input aria-label={`Byte de ${label.toLowerCase()}`} type="text" inputMode="numeric" maxLength={6} list={`bytes-${prefix}`} value={bytes[prefix]} onChange={event => { const value = event.target.value; if (/^\d{0,6}$/.test(value)) setBytes(current => ({ ...current, [prefix]: value.replace(/^0+(?=\d)/, "") })); }} onBlur={() => { if (!bytes[prefix]) setBytes(current => ({ ...current, [prefix]: "0" })); }} /><datalist id={`bytes-${prefix}`}>{choices.map(value => <option key={value} value={value} />)}</datalist></label>
+        {used.length > 0 && <div className="io-used-bytes">{used.map(value => <Button key={value} size="sm" variant={byte === value ? "default" : "ghost"} aria-label={`Mostrar byte ${prefix}${value}`} onClick={() => setBytes(current => ({ ...current, [prefix]: value }))}>{prefix}{value}</Button>)}</div>}
+        <div className="io-grid">{Array.from({ length: 8 }, (_, index) => {
+          const tag = `${prefix}${byte}.${index}`;
+          const value = Boolean(runtime.bits[tag]);
+          const content = <><span className="terminal">{index}</span><span className={prefix === "Q" ? "output-lamp" : "toggle-handle"} /><code>{tag}</code></>;
+          return prefix === "Q" ? <div key={tag} className={`io-channel output ${value ? "on" : ""}`} aria-label={`Saída ${tag}: ${value ? "ligada" : "desligada"}`}>{content}</div> : <Button key={tag} variant="ghost" className={`io-channel input ${value ? "on" : ""}`} onClick={() => setBit(tag, !value)} aria-label={`Alternar ${prefix === "I" ? "entrada" : "memória"} ${tag}`} aria-pressed={value}>{content}</Button>;
+        })}</div>
+      </div>;
+    })}
   </section>;
 }
 
