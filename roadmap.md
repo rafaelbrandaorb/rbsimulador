@@ -1,5 +1,8 @@
 # RB SIMULADOR
 
+- [ ] Corrigir início do teste IHM, acesso às propriedades e sobreposição de objetos
+- [ ] Validar acionamento Ladder/IHM e instrumentos após as correções
+
 - [x] Corrigir acionamento direto de contatos e energização de bobinas
 - [x] Criar motor de execução Ladder e tipos do projeto
 - [x] Construir editor Ladder e painel de propriedades
