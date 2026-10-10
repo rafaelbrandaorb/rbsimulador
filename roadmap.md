@@ -11,3 +11,6 @@
 - [x] Aproximar a interface do TIA Portal e LogixPro
 - [x] Adicionar painel de entradas e saídas clicáveis no editor
 - [x] Validar o novo fluxo visual e operacional
+- [ ] Completar edição e operação da IHM com tags vinculadas ao Ladder
+- [ ] Adicionar ramais paralelos e comandos de retenção para lógica dos alunos
+- [ ] Validar criação, execução e reabertura de projeto Ladder/IHM pela interface
