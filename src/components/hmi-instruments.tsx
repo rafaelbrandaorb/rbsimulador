@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { hmiValue, type HmiWidget, type Runtime } from "@/lib/plc";
+import { hmiValue, readBit, type HmiWidget, type Runtime } from "@/lib/plc";
 
 export function HmiInstrument({ widget, runtime, running }: { widget: HmiWidget; runtime: Runtime; running: boolean }) {
   const value = hmiValue(widget, runtime);
-  const active = Boolean(runtime.timers[widget.tag]?.done ?? runtime.bits[widget.tag]);
+  const active = readBit(widget.tag, runtime);
   const min = widget.min ?? 0;
   const max = widget.max ?? 1;
   const fraction = Math.max(0, Math.min(1, (value - min) / Math.max(0.001, max - min)));
-  const unit = widget.unit ?? (widget.display === "elapsed" || widget.display === "preset" ? "ms" : "");
+  const unit = widget.unit ?? ((widget.display === "elapsed" || widget.display === "preset") && widget.tag.startsWith("T") ? "ms" : "");
   if (widget.type === "motor") return <div className={`hmi-motor ${active ? "active" : ""}`} role="status" aria-label={`${widget.label}: ${active ? "ligado" : "parado"}`}>
     <svg viewBox="0 0 160 100" aria-hidden="true">
       <path className="motor-base" d="M30 78h91v10H30zM42 68h13v14H42zM99 68h13v14H99z" />

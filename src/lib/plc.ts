@@ -1,12 +1,14 @@
 import { z } from "zod";
 
-export type InstructionType = "contact-no" | "contact-nc" | "coil" | "coil-set" | "coil-reset" | "ton" | "tof";
+export type InstructionType = "contact-no" | "contact-nc" | "coil" | "coil-set" | "coil-reset" | "ton" | "tof" | "ctu" | "ctd" | "counter-reset";
 
 export type Instruction = {
   id: string;
   type: InstructionType;
   tag: string;
   preset?: number | undefined;
+  resetTag?: string | undefined;
+  loadTag?: string | undefined;
   comment?: string | undefined;
   parallel?: { tag: string; normallyClosed: boolean }[] | undefined;
 };
@@ -21,16 +23,18 @@ export type HmiWidget = {
   tag: string;
   label: string;
   action?: "set" | "reset" | "momentary" | "toggle" | undefined;
-  display?: "bit" | "elapsed" | "preset" | undefined;
+  display?: "bit" | "elapsed" | "preset" | "count" | undefined;
   min?: number | undefined;
   max?: number | undefined;
   unit?: string | undefined;
 };
 
 export type TimerValue = { elapsed: number; preset: number; done: boolean; input: boolean; offStartedAt?: number | undefined };
+export type CounterValue = { current: number; preset: number; done: boolean; input: boolean };
 export type Runtime = {
   bits: Record<string, boolean>;
   timers: Record<string, TimerValue>;
+  counters?: Record<string, CounterValue>;
   powered: Record<string, boolean>;
 };
 
@@ -40,7 +44,7 @@ export type SimulatorProject = {
   widgets: HmiWidget[];
 };
 
-export const EMPTY_RUNTIME: Runtime = { bits: {}, timers: {}, powered: {} };
+export const EMPTY_RUNTIME: Runtime = { bits: {}, timers: {}, counters: {}, powered: {} };
 
 export function normalizeTag(value: string) {
   return value.trim().toUpperCase().replace(/\s+/g, "");
@@ -50,8 +54,10 @@ export function validTag(tag: string, timer = false) {
   return timer ? /^T\d+$/.test(tag) : /^[IQM]\d+\.[0-7]$/.test(tag);
 }
 
-export const readableTag = (tag: string) => validTag(tag) || validTag(tag, true);
+export const counterTag = (tag: string) => /^C\d+$/.test(tag);
+export const readableTag = (tag: string) => validTag(tag) || validTag(tag, true) || counterTag(tag);
 export const writableTag = (tag: string) => /^[IM]\d+\.[0-7]$/.test(tag);
+export const readBit = (tag: string, runtime: Runtime) => runtime.counters?.[tag]?.done ?? runtime.timers[tag]?.done ?? runtime.bits[tag] ?? false;
 export function hmiSize(type: HmiWidgetType) {
   return { width: type === "chart" ? 300 : 180, height: type === "gauge" ? 240 : type === "chart" ? 220 : type === "motor" ? 170 : 140 };
 }
@@ -72,12 +78,14 @@ export function nextHmiPosition(widgets: HmiWidget[], type: HmiWidgetType) {
 }
 export function hmiValue(widget: HmiWidget, runtime: Runtime): number {
   const timer = runtime.timers[widget.tag];
-  const source = widget.display ?? (widget.tag.startsWith("T") && ["display", "gauge", "chart"].includes(widget.type) ? "elapsed" : "bit");
-  return source === "elapsed" ? timer?.elapsed ?? 0 : source === "preset" ? timer?.preset ?? 0 : (timer?.done ?? runtime.bits[widget.tag]) ? 1 : 0;
+  const counter = runtime.counters?.[widget.tag];
+  const source = widget.display ?? (widget.tag.startsWith("C") ? "count" : widget.tag.startsWith("T") && ["display", "gauge", "chart"].includes(widget.type) ? "elapsed" : "bit");
+  return source === "count" ? counter?.current ?? 0 : source === "elapsed" ? timer?.elapsed ?? 0 : source === "preset" ? counter?.preset ?? timer?.preset ?? 0 : readBit(widget.tag, runtime) ? 1 : 0;
 }
 const instructionSchema = z.object({
-  id: z.string().min(1), type: z.enum(["contact-no", "contact-nc", "coil", "coil-set", "coil-reset", "ton", "tof"]),
-  tag: z.string(), preset: z.number().finite().min(100).optional(), comment: z.string().optional(),
+  id: z.string().min(1), type: z.enum(["contact-no", "contact-nc", "coil", "coil-set", "coil-reset", "ton", "tof", "ctu", "ctd", "counter-reset"]),
+  tag: z.string(), preset: z.number().finite().min(1).optional(), comment: z.string().optional(),
+  resetTag: z.string().optional(), loadTag: z.string().optional(),
   parallel: z.array(z.object({ tag: z.string(), normallyClosed: z.boolean() })).max(8).optional(),
 });
 const projectSchema = z.object({
@@ -85,7 +93,7 @@ const projectSchema = z.object({
   rungs: z.array(z.object({ id: z.string().min(1), title: z.string(), instructions: z.array(instructionSchema).max(100) })).max(100),
   widgets: z.array(z.object({ id: z.string().min(1), type: z.enum(["lamp", "button-on", "button-off", "button-toggle", "text", "value", "motor", "display", "gauge", "chart"]),
     x: z.number().finite().min(0).max(1000), y: z.number().finite().min(0).max(660), tag: z.string(), label: z.string(),
-    action: z.enum(["set", "reset", "momentary", "toggle"]).optional(), display: z.enum(["bit", "elapsed", "preset"]).optional(),
+    action: z.enum(["set", "reset", "momentary", "toggle"]).optional(), display: z.enum(["bit", "elapsed", "preset", "count"]).optional(),
     min: z.number().finite().optional(), max: z.number().finite().optional(), unit: z.string().max(16).optional(),
   })).max(100),
 });
@@ -100,8 +108,12 @@ export function projectErrors(project: SimulatorProject): string[] {
   project.rungs.forEach((rung, index) => {
     rung.instructions.forEach(i => {
       const contact = i.type.startsWith("contact");
-      const okay = contact ? readableTag(i.tag) : i.type.startsWith("coil") ? /^[QM]\d+\.[0-7]$/.test(i.tag) : validTag(i.tag, true);
+      const counter = ["ctu", "ctd", "counter-reset"].includes(i.type);
+      const okay = contact ? readableTag(i.tag) : counter ? counterTag(i.tag) : i.type.startsWith("coil") ? /^[QM]\d+\.[0-7]$/.test(i.tag) : validTag(i.tag, true);
       if (!okay) errors.push(`Rede ${index + 1}: tag inválida ${i.tag || "vazia"}`);
+      if (counter && i.type !== "counter-reset" && (!Number.isSafeInteger(i.preset ?? 10) || (i.preset ?? 10) < 1 || (i.preset ?? 10) > 999999)) errors.push(`Rede ${index + 1}: contagem programada deve ser inteira entre 1 e 999999`);
+      if (!counter && !contact && !i.type.startsWith("coil") && (i.preset ?? 2000) < 100) errors.push(`Rede ${index + 1}: tempo mínimo de 100 ms`);
+      if ([i.resetTag, i.loadTag].some(tag => tag && !readableTag(tag))) errors.push(`Rede ${index + 1}: tag de reset/carga inválida`);
       if (i.parallel?.some(p => !readableTag(p.tag))) errors.push(`Rede ${index + 1}: tag inválida no ramal`);
     });
   });
@@ -116,12 +128,13 @@ export function scanProject(project: SimulatorProject, runtime: Runtime, scanMs:
   const activeTags = new Set(collectTags(project, EMPTY_RUNTIME));
   const bits = Object.fromEntries(Object.entries(runtime.bits).filter(([tag]) => !tag.startsWith("Q") || activeTags.has(tag)));
   const timers = Object.fromEntries(Object.entries(runtime.timers).filter(([tag]) => activeTags.has(tag)));
+  const counters = Object.fromEntries(Object.entries(runtime.counters ?? {}).filter(([tag]) => activeTags.has(tag)));
   const powered: Record<string, boolean> = {};
 
   for (const rung of project.rungs) {
     let power = true;
     for (const instruction of rung.instructions) {
-      const read = (tag: string) => Boolean(timers[tag]?.done ?? bits[tag]);
+      const read = (tag: string) => Boolean(counters[tag]?.done ?? timers[tag]?.done ?? bits[tag]);
       if (instruction.type.startsWith("contact")) {
         const closed = instruction.type === "contact-nc" ? !read(instruction.tag) : read(instruction.tag);
         power = power && (closed || Boolean(instruction.parallel?.some(p => p.normallyClosed ? !read(p.tag) : read(p.tag))));
@@ -153,6 +166,22 @@ export function scanProject(project: SimulatorProject, runtime: Runtime, scanMs:
         power = timers[instruction.tag]?.done ?? false;
       }
 
+      if (instruction.type === "ctu" || instruction.type === "ctd") {
+        const preset = Math.max(1, Math.min(999999, Math.floor(instruction.preset ?? 10)));
+        const previous = counters[instruction.tag] ?? { current: 0, preset, done: false, input: false };
+        const reset = Boolean(instruction.resetTag && read(instruction.resetTag));
+        const load = instruction.type === "ctd" && Boolean(instruction.loadTag && read(instruction.loadTag));
+        const rising = power && !previous.input;
+        const current = reset ? 0 : load ? preset : rising ? Math.max(0, Math.min(999999, previous.current + (instruction.type === "ctu" ? 1 : -1))) : previous.current;
+        const done = instruction.type === "ctu" ? current >= preset : current <= 0;
+        counters[instruction.tag] = { current, preset, done, input: power };
+        power = done;
+      }
+      if (instruction.type === "counter-reset" && power) {
+        const previous = counters[instruction.tag];
+        const down = project.rungs.some(r => r.instructions.some(i => i.type === "ctd" && i.tag === instruction.tag));
+        counters[instruction.tag] = { current: 0, preset: previous?.preset ?? 10, done: down, input: previous?.input ?? false };
+      }
       if (instruction.type === "coil") bits[instruction.tag] = power;
       if (instruction.type === "coil-set" && power) bits[instruction.tag] = true;
       if (instruction.type === "coil-reset" && power) bits[instruction.tag] = false;
@@ -160,13 +189,14 @@ export function scanProject(project: SimulatorProject, runtime: Runtime, scanMs:
     }
   }
 
-  return { bits, timers, powered };
+  return { bits, timers, counters, powered };
 }
 
 export function collectTags(project: SimulatorProject, runtime: Runtime) {
   const tags = new Set<string>(Object.keys(runtime.bits));
   Object.keys(runtime.timers).forEach((tag) => tags.add(tag));
-  project.rungs.forEach((rung) => rung.instructions.forEach((instruction) => { tags.add(instruction.tag); instruction.parallel?.forEach(p => tags.add(p.tag)); }));
+  Object.keys(runtime.counters ?? {}).forEach((tag) => tags.add(tag));
+  project.rungs.forEach((rung) => rung.instructions.forEach((instruction) => { tags.add(instruction.tag); if (instruction.resetTag) tags.add(instruction.resetTag); if (instruction.loadTag) tags.add(instruction.loadTag); instruction.parallel?.forEach(p => tags.add(p.tag)); }));
   project.widgets.forEach((widget) => widget.tag && tags.add(widget.tag));
   return [...tags].filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }

@@ -1,5 +1,8 @@
 # RB SIMULADOR
 
+- [ ] Adicionar CTU, CTD e RESET com tags C e valores na IHM
+- [ ] Validar pulsos, carga, zeramento, saída e portabilidade dos contadores
+
 - [x] Ampliar painel de entradas, saídas e memórias para múltiplos bytes e tags do projeto
 - [x] Verificar lógica com tags de vários bytes, selo e intertravamento
 

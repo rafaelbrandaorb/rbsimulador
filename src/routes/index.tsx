@@ -29,6 +29,8 @@ import { Button } from "@/components/ui/button";
 import { HmiCanvas, WidgetInspector } from "@/components/hmi-editor";
 import {
   collectTags,
+  counterTag,
+  readBit,
   nextHmiPosition,
   parseProject,
   projectErrors,
@@ -80,6 +82,9 @@ const instructionLabel: Record<InstructionType, string> = {
   "coil-reset": "Bobina RESET",
   ton: "TON",
   tof: "TOF",
+  ctu: "CTU · Contador crescente",
+  ctd: "CTD · Contador decrescente",
+  "counter-reset": "RES · Zerar contador",
 };
 
 function Simulator() {
@@ -157,12 +162,14 @@ function Simulator() {
   const addInstruction = (rungId: string, position?: number) => {
     if (running || !tool || tool === "delete") return;
     const timer = tool === "ton" || tool === "tof";
+    const counter = tool === "ctu" || tool === "ctd";
+    const nextTag = (prefix: string) => { let n = 1; while (tags.includes(`${prefix}${n}`)) n++; return `${prefix}${n}`; };
     const instruction: Instruction = {
       id: makeId(),
       type: tool,
-      tag: timer ? `T${tags.filter((tag) => tag.startsWith("T")).length + 1}` : `${tool.startsWith("coil") ? "Q" : "I"}0.0`,
+      tag: counter ? nextTag("C") : tool === "counter-reset" ? tags.find(counterTag) ?? "C1" : timer ? nextTag("T") : `${tool.startsWith("coil") ? "Q" : "I"}0.0`,
       comment: "",
-      ...(timer ? { preset: 2000 } : {}),
+      ...(timer ? { preset: 2000 } : counter ? { preset: 10, resetTag: "", ...(tool === "ctd" ? { loadTag: "" } : {}) } : {}),
     };
     setProject((current) => ({
       ...current,
@@ -322,6 +329,9 @@ function Simulator() {
             <ToolItem label="Bobina RESET" code="—(R)—" active={tool === "coil-reset"} onClick={() => setTool("coil-reset")} />
             <ToolItem label="Temporizador na energização" code="TON" active={tool === "ton"} onClick={() => setTool("ton")} />
             <ToolItem label="Temporizador no desligamento" code="TOF" active={tool === "tof"} onClick={() => setTool("tof")} />
+            <ToolItem label="Contador crescente" code="CTU" active={tool === "ctu"} onClick={() => setTool("ctu")} />
+            <ToolItem label="Contador decrescente" code="CTD" active={tool === "ctd"} onClick={() => setTool("ctd")} />
+            <ToolItem label="Zerar contador" code="RES" active={tool === "counter-reset"} onClick={() => setTool("counter-reset")} />
             <ToolItem label="Excluir elemento" code="DEL" active={tool === "delete"} onClick={() => setTool("delete")} danger />
           </SidebarSection>
           <SidebarSection title="Elementos IHM">
@@ -336,7 +346,7 @@ function Simulator() {
             <NavItem icon={<Gauge size={15} />} label="Régua de nível" onClick={() => { addWidget("gauge"); setPane("hmi"); }} />
             <NavItem icon={<Activity size={15} />} label="Gráfico de tendência" onClick={() => { addWidget("chart"); setPane("hmi"); }} />
           </SidebarSection>
-          <div className="address-help"><strong>Endereçamento</strong><span><code>I0…In</code> Entradas · bits 0–7</span><span><code>Q0…Qn</code> Saídas · bits 0–7</span><span><code>M0…Mn</code> Memórias · bits 0–7</span><span><code>T1…Tn</code> Temporizadores</span></div>
+          <div className="address-help"><strong>Endereçamento</strong><span><code>I0…In</code> Entradas · bits 0–7</span><span><code>Q0…Qn</code> Saídas · bits 0–7</span><span><code>M0…Mn</code> Memórias · bits 0–7</span><span><code>T1…Tn</code> Temporizadores</span><span><code>C1…Cn</code> Contadores</span></div>
         </aside>
         {sidebarOpen && <button className="sidebar-backdrop" aria-label="Fechar ferramentas" onClick={() => setSidebarOpen(false)} />}
 
@@ -455,7 +465,7 @@ function RungView({ rung, index, runtime, running, tool, selectedId, onAdd, onTi
     <div className="rung-canvas">
       <div className={`power-rail ${running ? "energized" : ""}`} />
       <div className="rung-wire-track">
-        {rung.instructions.map((instruction, position) => <div key={instruction.id} className="flex items-center"><Button variant="ghost" size="icon" className="insert-before" disabled={running || !tool || tool === "delete"} title="Inserir antes" onClick={() => onAdd(position)}><Plus size={10} /></Button><InstructionView instruction={instruction} energized={Boolean(running && runtime.powered[instruction.id])} selected={selectedId === instruction.id} onClick={() => onSelect(instruction)} /></div>)}
+        {rung.instructions.map((instruction, position) => <div key={instruction.id} className="flex items-center"><Button variant="ghost" size="icon" className="insert-before" disabled={running || !tool || tool === "delete"} title="Inserir antes" onClick={() => onAdd(position)}><Plus size={10} /></Button><InstructionView runtime={runtime} instruction={instruction} energized={Boolean(running && runtime.powered[instruction.id])} selected={selectedId === instruction.id} onClick={() => onSelect(instruction)} /></div>)}
         <Button size="icon" variant="ghost" disabled={running || !tool || tool === "delete"} className={`insert-node ${tool && tool !== "delete" ? "ready" : ""}`} onClick={() => onAdd()} title="Inserir instrução"><Plus size={15} /></Button>
       </div>
       <div className="power-rail right" />
@@ -463,7 +473,7 @@ function RungView({ rung, index, runtime, running, tool, selectedId, onAdd, onTi
   </article>;
 }
 
-function InstructionView({ instruction, energized, selected, onClick }: { instruction: Instruction; energized?: boolean; selected: boolean; onClick: () => void }) {
+function InstructionView({ instruction, runtime, energized, selected, onClick }: { runtime: Runtime; instruction: Instruction; energized?: boolean; selected: boolean; onClick: () => void }) {
   const timer = instruction.type === "ton" || instruction.type === "tof";
   return <div className={`instruction-wrap ${energized ? "energized" : ""}`}>
     <span className="wire" />
@@ -476,6 +486,7 @@ function InstructionView({ instruction, energized, selected, onClick }: { instru
       {instruction.type === "coil-reset" && <strong>—(R)—</strong>}
       {instruction.parallel?.map((p, index) => <span className="parallel-contact" key={index}><code>{p.tag}</code><strong>{p.normallyClosed ? "—|/|—" : "—| |—"}</strong></span>)}
       {timer && <span className="timer-block"><b>{instruction.type.toUpperCase()}</b><small>PT {instruction.preset} ms</small></span>}
+      {["ctu", "ctd", "counter-reset"].includes(instruction.type) && <span className="timer-block"><b>{instruction.type === "counter-reset" ? "RES" : instruction.type.toUpperCase()}</b><small>CV {runtime.counters?.[instruction.tag]?.current ?? 0}{instruction.type !== "counter-reset" ? ` / PV ${instruction.preset ?? 10}` : ""}</small></span>}
       {instruction.comment && <small className="instruction-comment">{instruction.comment}</small>}
     </button>
   </div>;
@@ -484,14 +495,16 @@ function InstructionView({ instruction, energized, selected, onClick }: { instru
 function InstructionInspector({ instruction, sealTag, tags, disabled, move, update, remove }: { instruction: Instruction; sealTag: string; tags: string[]; disabled: boolean; move: (direction: number) => void; update: (patch: Partial<Instruction>) => void; remove: () => void }) {
   const timer = instruction.type === "ton" || instruction.type === "tof";
   const contact = instruction.type.startsWith("contact");
-  const okay = contact ? readableTag(instruction.tag) : timer ? validTag(instruction.tag, true) : /^[QM]\d+\.[0-7]$/.test(instruction.tag);
+  const counter = ["ctu", "ctd", "counter-reset"].includes(instruction.type);
+  const okay = contact ? readableTag(instruction.tag) : counter ? counterTag(instruction.tag) : timer ? validTag(instruction.tag, true) : /^[QM]\d+\.[0-7]$/.test(instruction.tag);
   const hasSeal = instruction.parallel?.some(p => p.tag === sealTag && !p.normallyClosed);
-  return <fieldset className="property-form" disabled={disabled}><div className="property-type">{instructionLabel[instruction.type]}</div><label>Endereço / tag<input list="ladder-tags" value={instruction.tag} onChange={e => update({ tag: normalizeTag(e.target.value) })} /></label><datalist id="ladder-tags">{tags.map(t => <option key={t} value={t} />)}</datalist>{!okay && <p className="field-error">{timer ? "Use T1." : contact ? "Use I0.0, Q0.0, M0.0 ou T1." : "Bobina: use Q0.0 ou M0.0."}</p>}{timer && <label>Tempo programado (ms)<input type="number" min="100" step="100" value={instruction.preset ?? 2000} onChange={e => update({ preset: Math.max(100, Number(e.target.value)) })} /></label>}<label>Comentário<input value={instruction.comment ?? ""} onChange={e => update({ comment: e.target.value })} /></label>
+  return <fieldset className="property-form" disabled={disabled}><div className="property-type">{instructionLabel[instruction.type]}</div><label>Endereço / tag<input list="ladder-tags" value={instruction.tag} onChange={e => update({ tag: normalizeTag(e.target.value) })} /></label><datalist id="ladder-tags">{tags.map(t => <option key={t} value={t} />)}</datalist>{!okay && <p className="field-error">{counter ? "Use C1, C2, C3…" : timer ? "Use T1." : contact ? "Use I0.0, Q0.0, M0.0, T1 ou C1." : "Bobina: use Q0.0 ou M0.0."}</p>}{timer && <label>Tempo programado (ms)<input type="number" min="100" step="100" value={instruction.preset ?? 2000} onChange={e => update({ preset: Math.max(100, Number(e.target.value)) })} /></label>}<label>Comentário<input value={instruction.comment ?? ""} onChange={e => update({ comment: e.target.value })} /></label>
+    {counter && instruction.type !== "counter-reset" && <><label>Contagem programada (PV)<input type="number" min="1" max="999999" step="1" value={instruction.preset ?? 10} onChange={e => update({ preset: Math.max(1, Math.min(999999, Math.floor(Number(e.target.value)))) })} /></label><label>Tag de zeramento (R)<input list="ladder-tags" value={instruction.resetTag ?? ""} onChange={e => update({ resetTag: normalizeTag(e.target.value) })} /></label>{instruction.type === "ctd" && <label>Tag de carga (LD)<input list="ladder-tags" value={instruction.loadTag ?? ""} onChange={e => update({ loadTag: normalizeTag(e.target.value) })} /></label>}</>}
     {contact && <><strong className="text-xs">Selo / ramais paralelos (OU)</strong><Button size="sm" disabled={hasSeal || (instruction.parallel?.length ?? 0) >= 8} onClick={() => update({ parallel: [...(instruction.parallel ?? []), { tag: sealTag, normallyClosed: false }] })}><Plus size={12} /> Adicionar selo</Button>{instruction.parallel?.map((p, index) => <div className="parallel-properties" key={index}><input aria-label={`Tag do ramal ${index + 1}`} list="ladder-tags" value={p.tag} onChange={e => update({ parallel: instruction.parallel?.map((item, n) => n === index ? { ...item, tag: normalizeTag(e.target.value) } : item) })} /><select aria-label={`Tipo do ramal ${index + 1}`} value={p.normallyClosed ? "nc" : "no"} onChange={e => update({ parallel: instruction.parallel?.map((item, n) => n === index ? { ...item, normallyClosed: e.target.value === "nc" } : item) })}><option value="no">NA</option><option value="nc">NF</option></select><Button size="icon" variant="ghost" title="Excluir ramal" onClick={() => update({ parallel: instruction.parallel?.filter((_, n) => n !== index) })}><Trash2 size={12} /></Button></div>)}<Button size="sm" disabled={(instruction.parallel?.length ?? 0) >= 8} onClick={() => update({ parallel: [...(instruction.parallel ?? []), { tag: "Q0.0", normallyClosed: false }] })}><Plus size={12} /> Ramal paralelo</Button></>}
     <div className="flex gap-2"><Button title="Mover para esquerda" onClick={() => move(-1)}>←</Button><Button title="Mover para direita" onClick={() => move(1)}>→</Button></div><Button variant="danger" onClick={remove}><Trash2 size={13} /> Excluir instrução</Button></fieldset>;
 }
 
 function Monitor({ tags, runtime, running, setBit }: { tags: string[]; runtime: Runtime; running: boolean; setBit: (tag: string, value: boolean) => void }) {
-  return <div className="monitor-pane"><div className="workspace-head"><div><strong>Tabela de observação</strong><span> Valores online do CLP</span></div><span className="online-label"><span className={`status-led ${running ? "is-running" : ""}`} />{running ? "Online" : "Offline"}</span></div><div className="table-scroll"><table><thead><tr><th>Nome</th><th>Tipo</th><th>Valor</th><th>Controle</th></tr></thead><tbody>{tags.length === 0 ? <tr><td colSpan={4} className="empty-row">As tags aparecerão quando forem usadas no programa.</td></tr> : tags.map((tag) => { const timer = runtime.timers[tag]; const value = timer?.done ?? runtime.bits[tag] ?? false; const canControl = /^[IM]/.test(tag); return <tr key={tag}><td><code>{tag}</code></td><td>{tag.startsWith("I") ? "Entrada" : tag.startsWith("Q") ? "Saída" : tag.startsWith("M") ? "Memória" : "Temporizador"}</td><td><span className={`bit-value ${value ? "on" : ""}`}>{value ? "TRUE" : "FALSE"}</span>{timer && <small className="timer-value">{timer.elapsed} / {timer.preset} ms</small>}</td><td>{canControl ? <button className={`switch ${value ? "on" : ""}`} role="switch" aria-checked={value} aria-label={`Alterar ${tag}`} onClick={() => setBit(tag, !value)}><span /></button> : <span className="read-only">Somente leitura</span>}</td></tr>; })}</tbody></table></div></div>;
+  return <div className="monitor-pane"><div className="workspace-head"><div><strong>Tabela de observação</strong><span> Valores online do CLP</span></div><span className="online-label"><span className={`status-led ${running ? "is-running" : ""}`} />{running ? "Online" : "Offline"}</span></div><div className="table-scroll"><table><thead><tr><th>Nome</th><th>Tipo</th><th>Valor</th><th>Controle</th></tr></thead><tbody>{tags.length === 0 ? <tr><td colSpan={4} className="empty-row">As tags aparecerão quando forem usadas no programa.</td></tr> : tags.map((tag) => { const timer = runtime.timers[tag]; const counter = runtime.counters?.[tag]; const value = readBit(tag, runtime); const canControl = /^[IM]/.test(tag); return <tr key={tag}><td><code>{tag}</code></td><td>{tag.startsWith("I") ? "Entrada" : tag.startsWith("Q") ? "Saída" : tag.startsWith("M") ? "Memória" : tag.startsWith("C") ? "Contador" : "Temporizador"}</td><td><span className={`bit-value ${value ? "on" : ""}`}>{value ? "TRUE" : "FALSE"}</span>{counter && <small className="timer-value">CV {counter.current} / PV {counter.preset}</small>}{timer && <small className="timer-value">{timer.elapsed} / {timer.preset} ms</small>}</td><td>{canControl ? <button className={`switch ${value ? "on" : ""}`} role="switch" aria-checked={value} aria-label={`Alterar ${tag}`} onClick={() => setBit(tag, !value)}><span /></button> : <span className="read-only">Somente leitura</span>}</td></tr>; })}</tbody></table></div></div>;
 }
 
