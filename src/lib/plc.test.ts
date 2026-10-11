@@ -102,7 +102,7 @@ describe("Ladder e tags IHM", () => {
     expect(r.counters?.C2?.done).toBe(true);
   });
   test("RES zera contador e validação bloqueia instâncias duplicadas e PV inválido", () => {
-    const p = project([{ id: "c", type: "ctu", tag: "C1", preset: 2 }, { id: "r", type: "counter-reset", tag: "C1" }]);
+    const p: SimulatorProject = { name: "Reset", widgets: [], rungs: [{ id: "a", title: "Contar", instructions: [{ id: "c", type: "ctu", tag: "C1", preset: 2 }] }, { id: "b", title: "Zerar", instructions: [{ id: "r", type: "counter-reset", tag: "C1" }] }] };
     expect(scanProject(p, EMPTY_RUNTIME, 100, 0).counters?.C1?.current).toBe(0);
     expect(projectErrors(project([{ id: "a", type: "ctu", tag: "C1" }, { id: "b", type: "ctd", tag: "C1" }]))).toHaveLength(1);
     expect(projectErrors(project([{ id: "c", type: "ctu", tag: "C1", preset: 1.5 }]))).toHaveLength(1);
