@@ -16,3 +16,4 @@
 - Keep instrument value selection shared across displays, gauges and trends; trend history is runtime-only, bounded to 60 samples and sampled only while the PLC runs.
 - Serial TON/TOF blocks pass their done state to downstream instructions so connected coils respect timer delays.
 - Counters share the PLC scan runtime, count rising edges only, and expose done/current/preset to Ladder and HMI; reset/load commands take priority over counting.
+- Numeric MW tags and MOV instructions use the shared scan runtime; HMI movement maps the selected numeric source to a bounded travel range without generating independent process values.

@@ -1,5 +1,8 @@
 # RB SIMULADOR
 
+- [ ] Adicionar esteira com peça móvel, direção e intervalo vinculados à tag
+- [ ] Permitir posição numérica MW, exibição formatada e testar exercício completo
+
 - [ ] Adicionar CTU, CTD e RESET com tags C e valores na IHM
 - [ ] Validar pulsos, carga, zeramento, saída e portabilidade dos contadores
 
