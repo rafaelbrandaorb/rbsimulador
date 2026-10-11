@@ -1,10 +1,10 @@
 # RB SIMULADOR
 
-- [ ] Adicionar esteira com peça móvel, direção e intervalo vinculados à tag
-- [ ] Permitir posição numérica MW, exibição formatada e testar exercício completo
+- [x] Adicionar esteira com peça móvel, direção e intervalo vinculados à tag
+- [x] Permitir posição numérica MW, exibição formatada e testar exercício completo
 
-- [ ] Adicionar CTU, CTD e RESET com tags C e valores na IHM
-- [ ] Validar pulsos, carga, zeramento, saída e portabilidade dos contadores
+- [x] Adicionar CTU, CTD e RESET com tags C e valores na IHM
+- [x] Validar pulsos, carga, zeramento, saída e portabilidade dos contadores
 
 - [x] Ampliar painel de entradas, saídas e memórias para múltiplos bytes e tags do projeto
 - [x] Verificar lógica com tags de vários bytes, selo e intertravamento
