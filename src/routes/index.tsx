@@ -30,6 +30,7 @@ import { HmiCanvas, WidgetInspector } from "@/components/hmi-editor";
 import {
   collectTags,
   counterTag,
+  wordTag,
   readBit,
   nextHmiPosition,
   parseProject,
@@ -82,6 +83,7 @@ const instructionLabel: Record<InstructionType, string> = {
   "coil-reset": "Bobina RESET",
   ton: "TON",
   tof: "TOF",
+  mov: "MOV · Transferir valor",
   ctu: "CTU · Contador crescente",
   ctd: "CTD · Contador decrescente",
   "counter-reset": "RES · Zerar contador",
@@ -167,8 +169,9 @@ function Simulator() {
     const instruction: Instruction = {
       id: makeId(),
       type: tool,
-      tag: counter ? nextTag("C") : tool === "counter-reset" ? tags.find(counterTag) ?? "C1" : timer ? nextTag("T") : `${tool.startsWith("coil") ? "Q" : "I"}0.0`,
+      tag: tool === "mov" ? "MW10" : counter ? nextTag("C") : tool === "counter-reset" ? tags.find(counterTag) ?? "C1" : timer ? nextTag("T") : `${tool.startsWith("coil") ? "Q" : "I"}0.0`,
       comment: "",
+      ...(tool === "mov" ? { source: "C1" } : {}),
       ...(timer ? { preset: 2000 } : counter ? { preset: 10, resetTag: "", ...(tool === "ctd" ? { loadTag: "" } : {}) } : {}),
     };
     setProject((current) => ({
@@ -244,14 +247,20 @@ function Simulator() {
     setRuntime((current) => ({ ...current, bits: { ...current.bits, [tag]: value } }));
   };
 
+  const setNumber = (tag: string, value: number) => {
+    if (!wordTag(tag) || !Number.isFinite(value)) return;
+    setRuntime(current => ({ ...current, words: { ...current.words, [tag]: Math.max(-999999, Math.min(999999, value)) } }));
+  };
+
   const addWidget = (type: HmiWidgetType) => {
     if (hmiTesting) return;
     const position = nextHmiPosition(project.widgets, type);
     if (!position) { setNotice("Tela IHM cheia: mova ou exclua um objeto para liberar espaço"); return; }
     const widget: HmiWidget = {
       id: makeId(), type, ...position,
-      tag: type === "text" ? "" : type.startsWith("button") ? "I0.0" : "Q0.0",
-      label: type === "motor" ? "Motor elétrico" : type === "display" ? "Display" : type === "gauge" ? "Nível" : type === "chart" ? "Tendência" : type === "lamp" ? "Motor" : type === "button-on" ? "LIGA" : type === "button-off" ? "DESLIGA" : type === "button-toggle" ? "CHAVE" : type === "value" ? "Valor" : "Texto",
+      tag: type === "conveyor" || type === "numeric-input" ? "MW10" : type === "text" ? "" : type.startsWith("button") ? "I0.0" : "Q0.0",
+      label: type === "conveyor" ? "Peça na esteira" : type === "numeric-input" ? "Posição da peça" : type === "motor" ? "Motor elétrico" : type === "display" ? "Display" : type === "gauge" ? "Nível" : type === "chart" ? "Tendência" : type === "lamp" ? "Motor" : type === "button-on" ? "LIGA" : type === "button-off" ? "DESLIGA" : type === "button-toggle" ? "CHAVE" : type === "value" ? "Valor" : "Texto",
+      ...(type === "conveyor" ? { min: 0, max: 400, travel: 400, direction: "horizontal" as const } : {}),
       ...(["gauge", "chart"].includes(type) ? { min: 0, max: 1 } : {}),
     };
     setProject((current) => ({ ...current, widgets: [...current.widgets, widget] }));
@@ -264,6 +273,7 @@ function Simulator() {
     if (errors.length) { setNotice(errors[0] ?? "Erro de projeto"); return false; }
     if (!running) setRuntime(current => scanProject(project, current, SCAN_MS, Date.now()));
     setRunning(true);
+    setHmiTesting(true);
     setNotice("CLP em modo RUN");
     setPropertiesOpen(false); setSidebarOpen(false);
     return true;
@@ -331,6 +341,7 @@ function Simulator() {
             <ToolItem label="Temporizador no desligamento" code="TOF" active={tool === "tof"} onClick={() => setTool("tof")} />
             <ToolItem label="Contador crescente" code="CTU" active={tool === "ctu"} onClick={() => setTool("ctu")} />
             <ToolItem label="Contador decrescente" code="CTD" active={tool === "ctd"} onClick={() => setTool("ctd")} />
+            <ToolItem label="Transferir valor" code="MOV" active={tool === "mov"} onClick={() => setTool("mov")} />
             <ToolItem label="Zerar contador" code="RES" active={tool === "counter-reset"} onClick={() => setTool("counter-reset")} />
             <ToolItem label="Excluir elemento" code="DEL" active={tool === "delete"} onClick={() => setTool("delete")} danger />
           </SidebarSection>
@@ -344,9 +355,11 @@ function Simulator() {
             <NavItem icon={<Box size={15} />} label="Motor elétrico" onClick={() => { addWidget("motor"); setPane("hmi"); }} />
             <NavItem icon={<Tags size={15} />} label="Display digital" onClick={() => { addWidget("display"); setPane("hmi"); }} />
             <NavItem icon={<Gauge size={15} />} label="Régua de nível" onClick={() => { addWidget("gauge"); setPane("hmi"); }} />
+            <NavItem icon={<Box size={15} />} label="Esteira / peça móvel" onClick={() => { addWidget("conveyor"); setPane("hmi"); }} />
+            <NavItem icon={<Tags size={15} />} label="Entrada numérica" onClick={() => { addWidget("numeric-input"); setPane("hmi"); }} />
             <NavItem icon={<Activity size={15} />} label="Gráfico de tendência" onClick={() => { addWidget("chart"); setPane("hmi"); }} />
           </SidebarSection>
-          <div className="address-help"><strong>Endereçamento</strong><span><code>I0…In</code> Entradas · bits 0–7</span><span><code>Q0…Qn</code> Saídas · bits 0–7</span><span><code>M0…Mn</code> Memórias · bits 0–7</span><span><code>T1…Tn</code> Temporizadores</span><span><code>C1…Cn</code> Contadores</span></div>
+          <div className="address-help"><strong>Endereçamento</strong><span><code>I0…In</code> Entradas · bits 0–7</span><span><code>Q0…Qn</code> Saídas · bits 0–7</span><span><code>M0…Mn</code> Memórias · bits 0–7</span><span><code>T1…Tn</code> Temporizadores</span><span><code>C1…Cn</code> Contadores</span><span><code>MW0…n</code> Valores numéricos</span></div>
         </aside>
         {sidebarOpen && <button className="sidebar-backdrop" aria-label="Fechar ferramentas" onClick={() => setSidebarOpen(false)} />}
 
@@ -380,7 +393,7 @@ function Simulator() {
             </div>
           )}
 
-          {pane === "hmi" && <div className="hmi-workspace"><div className="workspace-head"><strong>IHM_1 · Conexão PLC_1</strong><div className="flex items-center gap-2"><span className="online-label"><span className={`status-led ${running ? "is-running" : ""}`} />{running ? "Online" : "Offline"}</span><Button size="sm" onClick={() => { if (hmiTesting) { setHmiTesting(false); setNotice("IHM em edição"); } else if (start()) { setHmiTesting(true); setNotice("IHM em teste — conectada ao CLP"); } }}>{hmiTesting ? "Editar tela" : "Testar IHM"}</Button></div></div><HmiCanvas project={project} runtime={runtime} testing={hmiTesting} running={running} selectedId={selectedWidget} setSelectedId={id => { setSelectedWidget(id); if (id) setPropertiesOpen(true); }} setBit={setBit} setProject={setProject} /></div>}
+          {pane === "hmi" && <div className="hmi-workspace"><div className="workspace-head"><strong>IHM_1 · Conexão PLC_1</strong><div className="flex items-center gap-2"><span className="online-label"><span className={`status-led ${running ? "is-running" : ""}`} />{running ? "Online" : "Offline"}</span><Button size="sm" onClick={() => { if (hmiTesting) { setHmiTesting(false); setNotice("IHM em edição"); } else if (start()) { setHmiTesting(true); setNotice("IHM em teste — conectada ao CLP"); } }}>{hmiTesting ? "Editar tela" : "Testar IHM"}</Button></div></div><HmiCanvas project={project} runtime={runtime} testing={hmiTesting} running={running} selectedId={selectedWidget} setSelectedId={id => { setSelectedWidget(id); if (id) setPropertiesOpen(true); }} setBit={setBit} setNumber={setNumber} setProject={setProject} /></div>}
           {pane === "monitor" && <Monitor tags={tags} runtime={runtime} running={running} setBit={setBit} />}
         </section>
 
@@ -487,6 +500,7 @@ function InstructionView({ instruction, runtime, energized, selected, onClick }:
       {instruction.parallel?.map((p, index) => <span className="parallel-contact" key={index}><code>{p.tag}</code><strong>{p.normallyClosed ? "—|/|—" : "—| |—"}</strong></span>)}
       {timer && <span className="timer-block"><b>{instruction.type.toUpperCase()}</b><small>PT {instruction.preset} ms</small></span>}
       {["ctu", "ctd", "counter-reset"].includes(instruction.type) && <span className="timer-block"><b>{instruction.type === "counter-reset" ? "RES" : instruction.type.toUpperCase()}</b><small>CV {runtime.counters?.[instruction.tag]?.current ?? 0}{instruction.type !== "counter-reset" ? ` / PV ${instruction.preset ?? 10}` : ""}</small></span>}
+      {instruction.type === "mov" && <span className="timer-block"><b>MOV</b><small>IN {instruction.source ?? "0"}</small><small>OUT {runtime.words?.[instruction.tag] ?? 0}</small></span>}
       {instruction.comment && <small className="instruction-comment">{instruction.comment}</small>}
     </button>
   </div>;
@@ -496,15 +510,16 @@ function InstructionInspector({ instruction, sealTag, tags, disabled, move, upda
   const timer = instruction.type === "ton" || instruction.type === "tof";
   const contact = instruction.type.startsWith("contact");
   const counter = ["ctu", "ctd", "counter-reset"].includes(instruction.type);
-  const okay = contact ? readableTag(instruction.tag) : counter ? counterTag(instruction.tag) : timer ? validTag(instruction.tag, true) : /^[QM]\d+\.[0-7]$/.test(instruction.tag);
+  const okay = instruction.type === "mov" ? wordTag(instruction.tag) : contact ? readableTag(instruction.tag) : counter ? counterTag(instruction.tag) : timer ? validTag(instruction.tag, true) : /^[QM]\d+\.[0-7]$/.test(instruction.tag);
   const hasSeal = instruction.parallel?.some(p => p.tag === sealTag && !p.normallyClosed);
-  return <fieldset className="property-form" disabled={disabled}><div className="property-type">{instructionLabel[instruction.type]}</div><label>Endereço / tag<input list="ladder-tags" value={instruction.tag} onChange={e => update({ tag: normalizeTag(e.target.value) })} /></label><datalist id="ladder-tags">{tags.map(t => <option key={t} value={t} />)}</datalist>{!okay && <p className="field-error">{counter ? "Use C1, C2, C3…" : timer ? "Use T1." : contact ? "Use I0.0, Q0.0, M0.0, T1 ou C1." : "Bobina: use Q0.0 ou M0.0."}</p>}{timer && <label>Tempo programado (ms)<input type="number" min="100" step="100" value={instruction.preset ?? 2000} onChange={e => update({ preset: Math.max(100, Number(e.target.value)) })} /></label>}<label>Comentário<input value={instruction.comment ?? ""} onChange={e => update({ comment: e.target.value })} /></label>
+  return <fieldset className="property-form" disabled={disabled}><div className="property-type">{instructionLabel[instruction.type]}</div><label>Endereço / tag<input list="ladder-tags" value={instruction.tag} onChange={e => update({ tag: normalizeTag(e.target.value) })} /></label><datalist id="ladder-tags">{tags.map(t => <option key={t} value={t} />)}</datalist>{!okay && <p className="field-error">{instruction.type === "mov" ? "Destino: use MW10, MW20…" : counter ? "Use C1, C2, C3…" : timer ? "Use T1." : contact ? "Use I0.0, Q0.0, M0.0, T1 ou C1." : "Bobina: use Q0.0 ou M0.0."}</p>}{timer && <label>Tempo programado (ms)<input type="number" min="100" step="100" value={instruction.preset ?? 2000} onChange={e => update({ preset: Math.max(100, Number(e.target.value)) })} /></label>}<label>Comentário<input value={instruction.comment ?? ""} onChange={e => update({ comment: e.target.value })} /></label>
+    {instruction.type === "mov" && <label>Origem (tag ou número)<input list="ladder-tags" value={instruction.source ?? "0"} onChange={e => update({ source: normalizeTag(e.target.value) })} /></label>}
     {counter && instruction.type !== "counter-reset" && <><label>Contagem programada (PV)<input type="number" min="1" max="999999" step="1" value={instruction.preset ?? 10} onChange={e => update({ preset: Math.max(1, Math.min(999999, Math.floor(Number(e.target.value)))) })} /></label><label>Tag de zeramento (R)<input list="ladder-tags" value={instruction.resetTag ?? ""} onChange={e => update({ resetTag: normalizeTag(e.target.value) })} /></label>{instruction.type === "ctd" && <label>Tag de carga (LD)<input list="ladder-tags" value={instruction.loadTag ?? ""} onChange={e => update({ loadTag: normalizeTag(e.target.value) })} /></label>}</>}
     {contact && <><strong className="text-xs">Selo / ramais paralelos (OU)</strong><Button size="sm" disabled={hasSeal || (instruction.parallel?.length ?? 0) >= 8} onClick={() => update({ parallel: [...(instruction.parallel ?? []), { tag: sealTag, normallyClosed: false }] })}><Plus size={12} /> Adicionar selo</Button>{instruction.parallel?.map((p, index) => <div className="parallel-properties" key={index}><input aria-label={`Tag do ramal ${index + 1}`} list="ladder-tags" value={p.tag} onChange={e => update({ parallel: instruction.parallel?.map((item, n) => n === index ? { ...item, tag: normalizeTag(e.target.value) } : item) })} /><select aria-label={`Tipo do ramal ${index + 1}`} value={p.normallyClosed ? "nc" : "no"} onChange={e => update({ parallel: instruction.parallel?.map((item, n) => n === index ? { ...item, normallyClosed: e.target.value === "nc" } : item) })}><option value="no">NA</option><option value="nc">NF</option></select><Button size="icon" variant="ghost" title="Excluir ramal" onClick={() => update({ parallel: instruction.parallel?.filter((_, n) => n !== index) })}><Trash2 size={12} /></Button></div>)}<Button size="sm" disabled={(instruction.parallel?.length ?? 0) >= 8} onClick={() => update({ parallel: [...(instruction.parallel ?? []), { tag: "Q0.0", normallyClosed: false }] })}><Plus size={12} /> Ramal paralelo</Button></>}
     <div className="flex gap-2"><Button title="Mover para esquerda" onClick={() => move(-1)}>←</Button><Button title="Mover para direita" onClick={() => move(1)}>→</Button></div><Button variant="danger" onClick={remove}><Trash2 size={13} /> Excluir instrução</Button></fieldset>;
 }
 
 function Monitor({ tags, runtime, running, setBit }: { tags: string[]; runtime: Runtime; running: boolean; setBit: (tag: string, value: boolean) => void }) {
-  return <div className="monitor-pane"><div className="workspace-head"><div><strong>Tabela de observação</strong><span> Valores online do CLP</span></div><span className="online-label"><span className={`status-led ${running ? "is-running" : ""}`} />{running ? "Online" : "Offline"}</span></div><div className="table-scroll"><table><thead><tr><th>Nome</th><th>Tipo</th><th>Valor</th><th>Controle</th></tr></thead><tbody>{tags.length === 0 ? <tr><td colSpan={4} className="empty-row">As tags aparecerão quando forem usadas no programa.</td></tr> : tags.map((tag) => { const timer = runtime.timers[tag]; const counter = runtime.counters?.[tag]; const value = readBit(tag, runtime); const canControl = /^[IM]/.test(tag); return <tr key={tag}><td><code>{tag}</code></td><td>{tag.startsWith("I") ? "Entrada" : tag.startsWith("Q") ? "Saída" : tag.startsWith("M") ? "Memória" : tag.startsWith("C") ? "Contador" : "Temporizador"}</td><td><span className={`bit-value ${value ? "on" : ""}`}>{value ? "TRUE" : "FALSE"}</span>{counter && <small className="timer-value">CV {counter.current} / PV {counter.preset}</small>}{timer && <small className="timer-value">{timer.elapsed} / {timer.preset} ms</small>}</td><td>{canControl ? <button className={`switch ${value ? "on" : ""}`} role="switch" aria-checked={value} aria-label={`Alterar ${tag}`} onClick={() => setBit(tag, !value)}><span /></button> : <span className="read-only">Somente leitura</span>}</td></tr>; })}</tbody></table></div></div>;
+  return <div className="monitor-pane"><div className="workspace-head"><div><strong>Tabela de observação</strong><span> Valores online do CLP</span></div><span className="online-label"><span className={`status-led ${running ? "is-running" : ""}`} />{running ? "Online" : "Offline"}</span></div><div className="table-scroll"><table><thead><tr><th>Nome</th><th>Tipo</th><th>Valor</th><th>Controle</th></tr></thead><tbody>{tags.length === 0 ? <tr><td colSpan={4} className="empty-row">As tags aparecerão quando forem usadas no programa.</td></tr> : tags.map((tag) => { const timer = runtime.timers[tag]; const counter = runtime.counters?.[tag]; const value = readBit(tag, runtime); const canControl = /^[IM]\d+\.[0-7]$/.test(tag); return <tr key={tag}><td><code>{tag}</code></td><td>{tag.startsWith("I") ? "Entrada" : tag.startsWith("Q") ? "Saída" : wordTag(tag) ? "Memória numérica" : tag.startsWith("M") ? "Memória" : tag.startsWith("C") ? "Contador" : "Temporizador"}</td><td><span className={`bit-value ${value ? "on" : ""}`}>{wordTag(tag) ? runtime.words?.[tag] ?? 0 : value ? "TRUE" : "FALSE"}</span>{counter && <small className="timer-value">CV {counter.current} / PV {counter.preset}</small>}{timer && <small className="timer-value">{timer.elapsed} / {timer.preset} ms</small>}</td><td>{canControl ? <button className={`switch ${value ? "on" : ""}`} role="switch" aria-checked={value} aria-label={`Alterar ${tag}`} onClick={() => setBit(tag, !value)}><span /></button> : <span className="read-only">Somente leitura</span>}</td></tr>; })}</tbody></table></div></div>;
 }
 

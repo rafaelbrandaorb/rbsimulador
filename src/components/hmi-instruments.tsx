@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { hmiValue, readBit, type HmiWidget, type Runtime } from "@/lib/plc";
+import { hmiValue, hmiMotion, formatHmiValue, readBit, type HmiWidget, type Runtime } from "@/lib/plc";
 
 export function HmiInstrument({ widget, runtime, running }: { widget: HmiWidget; runtime: Runtime; running: boolean }) {
   const value = hmiValue(widget, runtime);
@@ -19,8 +19,20 @@ export function HmiInstrument({ widget, runtime, running }: { widget: HmiWidget;
       <g className="motor-rotor"><path d="M32 48c-17-21 13-27 7-8zM32 48c26-6 16 22 2 9zM32 48c-9 25-29 4-9-1z" /><circle cx="32" cy="48" r="5" /></g>
     </svg><b>{widget.label}</b><span className="instrument-status">{active ? "EM OPERAÇÃO" : "PARADO"}</span><code>{widget.tag}</code>
   </div>;
-  if (widget.type === "display") return <div className="hmi-digital" role="status" aria-label={`${widget.label}: ${value} ${unit}`}><b>{widget.label}</b><output>{value.toLocaleString("pt-BR")}<small>{unit}</small></output><code>{widget.tag}</code></div>;
+  if (widget.type === "display") return <div className="hmi-digital" role="status" aria-label={`${widget.label}: ${value} ${unit}`}><b>{widget.label}</b><output>{formatHmiValue(value, widget)}<small>{unit}</small></output><code>{widget.tag}</code></div>;
   if (widget.type === "gauge") return <div className="hmi-level" role="meter" aria-label={widget.label} aria-valuemin={min} aria-valuemax={max} aria-valuenow={Math.max(min, Math.min(max, value))}><b>{widget.label}</b><div className="level-body"><svg viewBox="0 0 128 158" aria-hidden="true"><rect className="level-track" x="12" y="8" width="32" height="140" /><rect className="level-fill" x="13" y={148 - 138 * fraction} width="30" height={138 * fraction} />{Array.from({ length: 6 }, (_, i) => <g key={i}><path className="level-tick" d={`M48 ${8 + i * 28}h${i % 2 ? 6 : 10}`} /><text x="64" y={12 + i * 28}>{Number((max - (max - min) * i / 5).toFixed(1))}</text></g>)}</svg></div><output>{value.toLocaleString("pt-BR")} {unit}</output><code>{widget.tag}</code></div>;
+  if (widget.type === "conveyor") {
+    const vertical = widget.direction === "vertical";
+    const offset = hmiMotion(widget, runtime);
+    return <div className="hmi-conveyor" role="img" aria-label={`${widget.label}: posição ${value}, ${vertical ? "vertical" : "horizontal"}`}><b>{widget.label}</b><svg viewBox="0 0 460 200" aria-hidden="true">
+      <path className="conveyor-leg" d="M50 164v24h32v-24M372 164v24h32v-24" />
+      <rect className="conveyor-belt" x="12" y="138" width="432" height="30" rx="15" />
+      {Array.from({ length: 14 }, (_, i) => <circle key={i} className="conveyor-roller" cx={28 + i * 30} cy="153" r="9" />)}
+      <rect className="conveyor-drive" x="410" y="135" width="36" height="38" rx="3" />
+      <g className="conveyor-piece" data-offset={offset} transform={`translate(${vertical ? 205 : 14 + offset},${vertical ? 4 + offset : 104})`}><rect width="30" height="30" rx="2" /><path d="M0 8h30M15 0v8" /></g>
+      <path className="conveyor-guide" d={vertical ? "M260 10v116m-5-7 5 7 5-7" : "M25 75h400m-7-5 7 5-7 5"} />
+    </svg><footer><code>{widget.tag}</code><output>{formatHmiValue(value, widget)} {unit}</output></footer></div>;
+  }
   if (widget.type === "chart") return <Trend widget={widget} value={value} running={running} min={min} max={max} unit={unit} />;
   return null;
 }
