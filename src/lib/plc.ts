@@ -124,10 +124,15 @@ export function parseProject(data: unknown): SimulatorProject {
 }
 export function projectErrors(project: SimulatorProject): string[] {
   const errors: string[] = [];
+  const counterOwners = new Set<string>();
   project.rungs.forEach((rung, index) => {
     rung.instructions.forEach(i => {
       const contact = i.type.startsWith("contact");
       const counter = ["ctu", "ctd", "counter-reset"].includes(i.type);
+      if (i.type === "ctu" || i.type === "ctd") {
+        if (counterOwners.has(i.tag)) errors.push(`Rede ${index + 1}: ${i.tag} já possui um bloco contador; use outra tag`);
+        counterOwners.add(i.tag);
+      }
       const okay = i.type === "mov" ? wordTag(i.tag) : contact ? readableTag(i.tag) : counter ? counterTag(i.tag) : i.type.startsWith("coil") ? /^[QM]\d+\.[0-7]$/.test(i.tag) : validTag(i.tag, true);
       if (!okay) errors.push(`Rede ${index + 1}: tag inválida ${i.tag || "vazia"}`);
       if (counter && i.type !== "counter-reset" && (!Number.isSafeInteger(i.preset ?? 10) || (i.preset ?? 10) < 1 || (i.preset ?? 10) > 999999)) errors.push(`Rede ${index + 1}: contagem programada deve ser inteira entre 1 e 999999`);
